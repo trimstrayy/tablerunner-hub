@@ -10,10 +10,11 @@ import { Building2, LogOut, ShoppingCart, BarChart3, Menu, User } from 'lucide-r
 interface MainLayoutProps {
   userRole: 'admin' | 'owner';
   userEmail: string;
+  hotelName?: string;
   onLogout: () => void;
 }
 
-export function MainLayout({ userRole, userEmail, onLogout }: MainLayoutProps) {
+export function MainLayout({ userRole, userEmail, hotelName, onLogout }: MainLayoutProps) {
   const [activeTab, setActiveTab] = useState('orders');
 
   return (
