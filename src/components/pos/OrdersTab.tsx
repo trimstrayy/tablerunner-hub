@@ -1,52 +1,47 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Search, Plus, Minus, Save, X } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Search, Plus, Minus, Save, X, Edit3, Trash2, Settings, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { AuthUser, MenuItem, CartItem } from '@/types/database';
+import { useMenuItems, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem, useCreateOrder } from '@/hooks/useSupabase';
 
-interface MenuItem {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  image?: string;
-}
-
-interface OrderItem {
-  id: string;
-  name: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-}
-
-const mockMenuItems: MenuItem[] = [
-  { id: '1', name: 'Masala Tea', category: 'Tea', price: 15, image: '🫖' },
-  { id: '2', name: 'Black Coffee', category: 'Drinks', price: 20, image: '☕' },
-  { id: '3', name: 'Samosa', category: 'Snacks', price: 25, image: '🥟' },
-  { id: '4', name: 'Sandwich', category: 'Snacks', price: 40, image: '🥪' },
-  { id: '5', name: 'Chai Latte', category: 'Tea', price: 35, image: '🍵' },
-  { id: '6', name: 'Cold Coffee', category: 'Drinks', price: 45, image: '🥤' },
-];
-
-const categories = ['All', 'Tea', 'Drinks', 'Snacks'];
+const categories = ['All', 'Tea', 'Drinks', 'Snacks', 'Main Course', 'Desserts'];
 
 interface OrdersTabProps {
-  userRole: 'admin' | 'owner';
+  user: AuthUser;
 }
 
-export function OrdersTab({ userRole }: OrdersTabProps) {
+export function OrdersTab({ user }: OrdersTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [orderItems, setOrderItems] = useState<CartItem[]>([]);
   const [orderNumber] = useState(() => Math.floor(Math.random() * 1000) + 1000);
   const [discount, setDiscount] = useState(0);
+  const [isEditingMenu, setIsEditingMenu] = useState(false);
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [isAddingItem, setIsAddingItem] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    category: 'Tea',
+    price: '',
+    image_url: ''
+  });
   const { toast } = useToast();
 
-  const filteredItems = mockMenuItems.filter(item => {
+  // Supabase hooks
+  const { data: menuItems = [], isLoading: isLoadingMenu, refetch: refetchMenu } = useMenuItems(user.id);
+  const createMenuItem = useCreateMenuItem();
+  const updateMenuItem = useUpdateMenuItem();
+  const deleteMenuItem = useDeleteMenuItem();
+  const createOrder = useCreateOrder();
+
+  const filteredItems = menuItems.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
     return matchesSearch && matchesCategory;
@@ -73,210 +68,474 @@ export function OrdersTab({ userRole }: OrdersTabProps) {
     });
   };
 
-  const removeFromOrder = (itemId: string) => {
-    setOrderItems(prev => {
-      const existingItem = prev.find(item => item.id === itemId);
-      if (existingItem && existingItem.quantity > 1) {
-        return prev.map(item =>
-          item.id === itemId
-            ? { ...item, quantity: item.quantity - 1, total: (item.quantity - 1) * item.unitPrice }
-            : item
-        );
-      } else {
-        return prev.filter(item => item.id !== itemId);
-      }
-    });
+  const updateQuantity = (id: string, change: number) => {
+    setOrderItems(prev =>
+      prev.map(item => {
+        if (item.id === id) {
+          const newQuantity = Math.max(0, item.quantity + change);
+          return newQuantity === 0 
+            ? null 
+            : { ...item, quantity: newQuantity, total: newQuantity * item.unitPrice };
+        }
+        return item;
+      }).filter(Boolean) as CartItem[]
+    );
+  };
+
+  const removeFromOrder = (id: string) => {
+    setOrderItems(prev => prev.filter(item => item.id !== id));
   };
 
   const subtotal = orderItems.reduce((sum, item) => sum + item.total, 0);
-  const finalTotal = subtotal - discount;
+  const total = subtotal - discount;
 
-  const saveOrder = () => {
-    toast({
-      title: "Order saved successfully",
-      description: `Order #${orderNumber} has been saved to the database.`,
-    });
-    setOrderItems([]);
-    setDiscount(0);
+  const handleSaveOrder = async () => {
+    if (orderItems.length === 0) {
+      toast({
+        title: "Cannot save order",
+        description: "Add items to the order first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const orderData = {
+        order_number: orderNumber,
+        owner_id: user.id,
+        subtotal,
+        discount,
+        total,
+      };
+
+      const orderItemsData = orderItems.map(item => ({
+        item_id: item.id,
+        quantity: item.quantity,
+        price: item.unitPrice,
+        total: item.total,
+      }));
+
+      await createOrder.mutateAsync({
+        order: orderData,
+        orderItems: orderItemsData,
+      });
+
+      // Clear the order
+      setOrderItems([]);
+      setDiscount(0);
+    } catch (error) {
+      console.error('Error saving order:', error);
+    }
   };
 
-  const cancelOrder = () => {
-    setOrderItems([]);
-    setDiscount(0);
-    toast({
-      title: "Order cancelled",
-      description: "Current order has been cleared.",
+  // Menu editing functions
+  const handleSaveMenuItem = async () => {
+    if (!formData.name || !formData.price || !formData.category) {
+      toast({
+        title: "Missing information",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const price = parseFloat(formData.price);
+    if (isNaN(price) || price <= 0) {
+      toast({
+        title: "Invalid price",
+        description: "Please enter a valid price.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      if (editingItem) {
+        await updateMenuItem.mutateAsync({
+          id: editingItem.id,
+          updates: {
+            name: formData.name,
+            category: formData.category,
+            price,
+            image_url: formData.image_url || null,
+          },
+        });
+      } else {
+        await createMenuItem.mutateAsync({
+          name: formData.name,
+          category: formData.category,
+          price,
+          image_url: formData.image_url || null,
+          owner_id: user.id,
+        });
+      }
+
+      setFormData({ name: '', category: 'Tea', price: '', image_url: '' });
+      setEditingItem(null);
+      setIsAddingItem(false);
+    } catch (error) {
+      console.error('Error saving menu item:', error);
+    }
+  };
+
+  const handleEditMenuItem = (item: MenuItem) => {
+    setEditingItem(item);
+    setFormData({
+      name: item.name,
+      category: item.category,
+      price: item.price.toString(),
+      image_url: item.image_url || '',
     });
+    setIsAddingItem(true);
+  };
+
+  const handleDeleteMenuItem = async (id: string) => {
+    try {
+      await deleteMenuItem.mutateAsync(id);
+    } catch (error) {
+      console.error('Error deleting menu item:', error);
+    }
+  };
+
+  const cancelEdit = () => {
+    setFormData({ name: '', category: 'Tea', price: '', image_url: '' });
+    setEditingItem(null);
+    setIsAddingItem(false);
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-200px)]">
-      {/* Left Column - Search & Categories */}
-      <div className="lg:col-span-3 space-y-4">
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="text-lg">Search & Filter</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search menu items..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+    <div className="grid gap-4 grid-cols-1 lg:grid-cols-4">
+      {/* Menu Section */}
+      <Card className="shadow-card lg:col-span-3">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Menu Items</CardTitle>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetchMenu()}
+                disabled={isLoadingMenu}
+                className="flex items-center space-x-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoadingMenu ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditingMenu(!isEditingMenu)}
+                className="flex items-center space-x-2"
+              >
+                <Settings className="w-4 h-4" />
+                <span>{isEditingMenu ? 'View Mode' : 'Edit Menu'}</span>
+              </Button>
             </div>
-            
-            <div className="space-y-2">
-              <p className="font-medium text-sm">Categories</p>
-              <div className="flex flex-wrap gap-2">
+          </div>
+          
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <Input
+              placeholder="Search menu items..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </CardHeader>
+        
+        <CardContent>
+          <div className="flex gap-4">
+            {/* Categories Sidebar */}
+            <div className="w-28 flex-shrink-0">
+              <div className="space-y-1">
                 {categories.map(category => (
-                  <Badge
+                  <button
                     key={category}
-                    variant={selectedCategory === category ? "default" : "outline"}
-                    className={`cursor-pointer transition-colors ${
-                      selectedCategory === category 
-                        ? 'bg-primary text-primary-foreground' 
-                        : 'hover:bg-primary/10'
-                    }`}
                     onClick={() => setSelectedCategory(category)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      selectedCategory === category
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                    }`}
                   >
                     {category}
-                  </Badge>
+                  </button>
                 ))}
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            
+            {/* Menu Items Grid */}
+            <div className="flex-1">
+              {isEditingMenu && (
+                <div className="border rounded-lg p-4 bg-muted/50 mb-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-medium text-sm">
+                      {isAddingItem ? (editingItem ? 'Edit Item' : 'Add New Item') : 'Menu Management'}
+                    </h4>
+                    {!isAddingItem && (
+                      <Button
+                        size="sm"
+                        onClick={() => setIsAddingItem(true)}
+                        className="flex items-center space-x-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Add Item</span>
+                      </Button>
+                    )}
+                  </div>
 
-      {/* Middle Column - Menu Grid */}
-      <div className="lg:col-span-6">
-        <Card className="shadow-card h-full">
-          <CardHeader>
-            <CardTitle className="text-lg">Menu Items</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-[500px] overflow-y-auto">
-              {filteredItems.map(item => (
-                <Card
-                  key={item.id}
-                  className="cursor-pointer hover:shadow-elevated transition-all duration-200 hover:scale-105"
-                  onClick={() => addToOrder(item)}
-                >
-                  <CardContent className="p-4 text-center space-y-2">
-                    <div className="text-3xl">{item.image}</div>
-                    <h4 className="font-medium text-sm">{item.name}</h4>
-                    <p className="text-primary font-bold">₹{item.price}</p>
-                    <Badge variant="secondary" className="text-xs">
-                      {item.category}
-                    </Badge>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Right Column - Order Panel */}
-      <div className="lg:col-span-3">
-        <Card className="shadow-card h-full">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Order #{orderNumber}</span>
-              <Badge variant="outline">{orderItems.length} items</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {orderItems.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <p>No items in order</p>
-                <p className="text-sm">Click menu items to add</p>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-3 max-h-60 overflow-y-auto">
-                  {orderItems.map(item => (
-                    <div key={item.id} className="flex items-center justify-between bg-muted/50 p-3 rounded-lg">
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">{item.name}</p>
-                        <p className="text-xs text-muted-foreground">₹{item.unitPrice} each</p>
+                  {isAddingItem && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="name" className="text-sm">Name *</Label>
+                          <Input
+                            id="name"
+                            value={formData.name}
+                            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                            placeholder="Item name"
+                            className="text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="price" className="text-sm">Price *</Label>
+                          <Input
+                            id="price"
+                            type="number"
+                            step="0.01"
+                            value={formData.price}
+                            onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
+                            placeholder="0.00"
+                            className="text-sm"
+                          />
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-2">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="category" className="text-sm">Category *</Label>
+                          <Select
+                            value={formData.category}
+                            onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}
+                          >
+                            <SelectTrigger className="text-sm">
+                              <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {categories.filter(cat => cat !== 'All').map(category => (
+                                <SelectItem key={category} value={category} className="text-sm">
+                                  {category}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="image" className="text-sm">Image/Emoji</Label>
+                          <Input
+                            id="image"
+                            value={formData.image_url}
+                            onChange={(e) => setFormData(prev => ({ ...prev, image_url: e.target.value }))}
+                            placeholder="🍕 or image URL"
+                            className="text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <Button variant="outline" size="sm" onClick={cancelEdit}>
+                          <X className="w-3 h-3 mr-1" />
+                          Cancel
+                        </Button>
+                        <Button size="sm" onClick={handleSaveMenuItem}>
+                          <Save className="w-3 h-3 mr-1" />
+                          {editingItem ? 'Update' : 'Add'} Item
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {isLoadingMenu ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-muted-foreground">Loading menu...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {filteredItems.map(item => (
+                    <div 
+                      key={item.id} 
+                      className={`relative p-3 border rounded-xl transition-all duration-200 ${
+                        !isEditingMenu 
+                          ? 'cursor-pointer hover:bg-primary/5 hover:border-primary/30 hover:shadow-lg hover:scale-105' 
+                          : 'hover:bg-muted/50'
+                      }`}
+                      onClick={() => !isEditingMenu && addToOrder(item)}
+                    >
+                      <div className="flex flex-col items-center text-center space-y-2">
+                        <div className="w-12 h-12 bg-gradient-to-br from-primary/10 to-primary/20 rounded-xl flex items-center justify-center text-xl shadow-sm">
+                          {item.image_url || '🍽️'}
+                        </div>
+                        <div className="space-y-1">
+                          <h3 className="font-semibold text-sm text-foreground leading-tight">{item.name}</h3>
+                          <Badge variant="secondary" className="text-xs font-medium">
+                            {item.category}
+                          </Badge>
+                          <p className="text-lg font-bold text-primary">₹{item.price}</p>
+                        </div>
+                      </div>
+                      
+                      {isEditingMenu && (
+                        <div className="absolute top-1 right-1 flex space-x-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditMenuItem(item);
+                            }}
+                            className="w-6 h-6 p-0 hover:bg-blue-50 hover:border-blue-300"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteMenuItem(item.id);
+                            }}
+                            className="w-6 h-6 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      )}
+                      
+                      {!isEditingMenu && (
+                        <div className="absolute inset-0 rounded-xl border-2 border-transparent hover:border-primary/30 transition-all pointer-events-none" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Order Section - Smaller */}
+      <Card className="shadow-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center justify-between text-lg">
+            <span>Order</span>
+            <Badge variant="outline" className="text-xs">#{orderNumber}</Badge>
+          </CardTitle>
+        </CardHeader>
+        
+        <CardContent className="space-y-3">
+          {orderItems.length === 0 ? (
+            <div className="text-center py-6 text-muted-foreground">
+              <p className="text-sm">No items in order</p>
+              <p className="text-xs">Add items to get started</p>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {orderItems.map(item => (
+                  <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg text-sm">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">₹{item.unitPrice} each</p>
+                    </div>
+                    <div className="flex items-center space-x-2 ml-2">
+                      <div className="flex items-center space-x-1">
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => removeFromOrder(item.id)}
-                          className="w-8 h-8 p-0"
+                          onClick={() => updateQuantity(item.id, -1)}
+                          className="w-6 h-6 p-0"
                         >
                           <Minus className="w-3 h-3" />
                         </Button>
-                        <span className="text-sm font-medium w-6 text-center">{item.quantity}</span>
+                        <span className="font-medium text-xs min-w-[1.5rem] text-center">{item.quantity}</span>
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => addToOrder(mockMenuItems.find(m => m.id === item.id)!)}
-                          className="w-8 h-8 p-0"
+                          onClick={() => updateQuantity(item.id, 1)}
+                          className="w-6 h-6 p-0"
                         >
                           <Plus className="w-3 h-3" />
                         </Button>
                       </div>
-                      <div className="w-16 text-right">
-                        <p className="font-medium text-sm">₹{item.total}</p>
-                      </div>
+                      <p className="font-semibold text-xs min-w-[2.5rem] text-right">₹{item.total}</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => removeFromOrder(item.id)}
+                        className="w-6 h-6 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
                     </div>
-                  ))}
-                </div>
-
-                <Separator />
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Subtotal</span>
-                    <span>₹{subtotal}</span>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span>Discount</span>
+                ))}
+              </div>
+
+              <Separator />
+
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Subtotal:</span>
+                  <span className="font-semibold">₹{subtotal}</span>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="discount" className="text-xs">Discount:</Label>
+                  <div className="flex items-center space-x-1">
                     <Input
+                      id="discount"
                       type="number"
+                      step="0.01"
                       value={discount}
                       onChange={(e) => setDiscount(Number(e.target.value))}
-                      className="w-20 h-8 text-right"
-                      min="0"
-                      max={subtotal}
+                      className="w-16 h-6 text-xs text-right"
+                      placeholder="0"
                     />
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between font-bold">
-                    <span>Total</span>
-                    <span className="text-primary">₹{finalTotal}</span>
+                    <span className="text-xs">₹</span>
                   </div>
                 </div>
+                
+                <Separator />
+                
+                <div className="flex justify-between font-bold">
+                  <span>Total:</span>
+                  <span className="text-primary">₹{total}</span>
+                </div>
+              </div>
 
-                <div className="flex space-x-2 pt-4">
-                  <Button
-                    onClick={saveOrder}
-                    className="flex-1 bg-gradient-to-r from-success to-accent text-white"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Save
-                  </Button>
-                  <Button
-                    onClick={cancelOrder}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Cancel
-                  </Button>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              <Button 
+                onClick={handleSaveOrder}
+                className="w-full"
+                size="sm"
+                disabled={createOrder.isPending}
+              >
+                {createOrder.isPending ? (
+                  <>
+                    <RefreshCw className="w-3 h-3 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3 h-3 mr-2" />
+                    Save Order
+                  </>
+                )}
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

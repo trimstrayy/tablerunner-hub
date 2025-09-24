@@ -6,16 +6,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Building2, User, Mail, Lock, MapPin, UserPlus } from 'lucide-react';
+import { AuthUser, UserRole } from '@/types/database';
 
 interface LoginFormProps {
-  onLogin: (email: string, role: 'admin' | 'owner', hotelName?: string) => void;
+  onLogin: (user: AuthUser) => void;
 }
 
 export function LoginForm({ onLogin }: LoginFormProps) {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'admin' | 'owner'>('owner');
+  const [role, setRole] = useState<UserRole>('owner');
   const [hotelName, setHotelName] = useState('');
   const [hotelLocation, setHotelLocation] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -48,7 +49,16 @@ export function LoginForm({ onLogin }: LoginFormProps) {
         description: `Welcome ${users.role}!`,
       });
       
-      onLogin(users.email, users.role as 'admin' | 'owner', users.hotel_name);
+      // Create AuthUser object
+      const authUser: AuthUser = {
+        id: users.id,
+        email: users.email,
+        role: users.role as UserRole,
+        hotel_name: users.hotel_name || undefined,
+        hotel_location: users.hotel_location || undefined,
+      };
+      
+      onLogin(authUser);
     } catch (error) {
       toast({
         title: "Login failed",

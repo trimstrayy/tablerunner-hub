@@ -4,17 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { OrdersTab } from '@/components/pos/OrdersTab';
 import { DashboardTab } from '@/components/dashboard/DashboardTab';
-import { MenuManagementTab } from '@/components/menu/MenuManagementTab';
-import { Building2, LogOut, ShoppingCart, BarChart3, Menu, User } from 'lucide-react';
+import { Building2, LogOut, ShoppingCart, BarChart3, User } from 'lucide-react';
+import { AuthUser } from '@/types/database';
 
 interface MainLayoutProps {
-  userRole: 'admin' | 'owner';
-  userEmail: string;
-  hotelName?: string;
+  user: AuthUser;
   onLogout: () => void;
 }
 
-export function MainLayout({ userRole, userEmail, hotelName, onLogout }: MainLayoutProps) {
+export function MainLayout({ user, onLogout }: MainLayoutProps) {
   const [activeTab, setActiveTab] = useState('orders');
 
   return (
@@ -37,9 +35,9 @@ export function MainLayout({ userRole, userEmail, hotelName, onLogout }: MainLay
               <div className="text-right">
                 <p className="text-sm font-medium flex items-center space-x-2">
                   <User className="w-4 h-4" />
-                  <span className="capitalize">{userRole}</span>
+                  <span className="capitalize">{user.role}</span>
                 </p>
-                <p className="text-xs text-muted-foreground">{userEmail}</p>
+                <p className="text-xs text-muted-foreground">{user.email}</p>
               </div>
               <Button 
                 variant="outline" 
@@ -58,13 +56,13 @@ export function MainLayout({ userRole, userEmail, hotelName, onLogout }: MainLay
       {/* Main Content */}
       <div className="container mx-auto p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 lg:w-96 mx-auto bg-card shadow-card">
+          <TabsList className="grid w-full grid-cols-2 lg:w-96 mx-auto bg-card shadow-card">
             <TabsTrigger 
               value="orders" 
               className="flex items-center space-x-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
             >
               <ShoppingCart className="w-4 h-4" />
-              <span>Orders</span>
+              <span>POS</span>
             </TabsTrigger>
             <TabsTrigger 
               value="dashboard" 
@@ -73,25 +71,14 @@ export function MainLayout({ userRole, userEmail, hotelName, onLogout }: MainLay
               <BarChart3 className="w-4 h-4" />
               <span>Dashboard</span>
             </TabsTrigger>
-            <TabsTrigger 
-              value="menu" 
-              className="flex items-center space-x-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-            >
-              <Menu className="w-4 h-4" />
-              <span>Menu</span>
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="orders" className="space-y-0">
-            <OrdersTab userRole={userRole} />
+            <OrdersTab user={user} />
           </TabsContent>
 
           <TabsContent value="dashboard" className="space-y-0">
-            <DashboardTab userRole={userRole} />
-          </TabsContent>
-
-          <TabsContent value="menu" className="space-y-0">
-            <MenuManagementTab userRole={userRole} />
+            <DashboardTab user={user} />
           </TabsContent>
         </Tabs>
       </div>
