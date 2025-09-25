@@ -1,0 +1,15 @@
+{
+  "name": "TableRunner Hub",
+  "short_name": "TableRunner",
+  "description": "Restaurant POS System",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "32x32",
+      "type": "image/svg+xml"
+    }
+  ],
+  "theme_color": "#059669",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}
