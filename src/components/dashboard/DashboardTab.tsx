@@ -3,8 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, Eye, Search, TrendingUp, DollarSign, ShoppingBag, Users, RefreshCw } from 'lucide-react';
-import { format } from 'date-fns';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { Calendar, Eye, Search, TrendingUp, DollarSign, ShoppingBag, Users, RefreshCw, CalendarDays } from 'lucide-react';
+import { format, isToday, isSameDay } from 'date-fns';
 import { AuthUser } from '@/types/database';
 import { useOrders } from '@/hooks/useSupabase';
 
@@ -15,6 +17,9 @@ interface DashboardTabProps {
 export function DashboardTab({ user }: DashboardTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'custom'>('all');
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   // Fetch orders from Supabase
   const { data: ordersData = [], isLoading, refetch } = useOrders(user.id);
@@ -35,13 +40,26 @@ export function DashboardTab({ user }: DashboardTabProps) {
     status: 'completed' as const
   }));
 
-  const filteredOrders = orders.filter((order: any) =>
+  // Apply date filtering
+  const dateFilteredOrders = orders.filter((order: any) => {
+    if (dateFilter === 'today') {
+      return isToday(order.date);
+    } else if (dateFilter === 'custom' && selectedDate) {
+      return isSameDay(order.date, selectedDate);
+    }
+    return true; // 'all' - show all orders
+  });
+
+  // Apply search filtering on top of date filtering
+  const filteredOrders = dateFilteredOrders.filter((order: any) =>
     order.orderNumber.toString().includes(searchTerm) ||
     order.items.some((item: any) => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const totalSales = orders.reduce((sum: number, order: any) => sum + order.total, 0);
-  const totalOrders = orders.length;
+  // Calculate stats based on date filter
+  const statsOrders = dateFilter === 'all' ? orders : dateFilteredOrders;
+  const totalSales = statsOrders.reduce((sum: number, order: any) => sum + order.total, 0);
+  const totalOrders = statsOrders.length;
   const todaysOrders = orders.filter((order: any) => 
     order.date.toDateString() === new Date().toDateString()
   ).length;
@@ -69,8 +87,12 @@ export function DashboardTab({ user }: DashboardTabProps) {
                 <DollarSign className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Sales</p>
-                <p className="text-2xl font-bold text-primary">₹{totalSales}</p>
+                <p className="text-sm font-medium text-muted-foreground">
+                  {dateFilter === 'today' ? "Today's Sales" : 
+                   dateFilter === 'custom' && selectedDate ? `Sales on ${format(selectedDate, 'MMM dd')}` : 
+                   'Total Sales'}
+                </p>
+                <p className="text-2xl font-bold text-primary">NRs {totalSales}</p>
               </div>
             </div>
           </CardContent>
@@ -83,7 +105,11 @@ export function DashboardTab({ user }: DashboardTabProps) {
                 <ShoppingBag className="w-5 h-5 text-success" />
               </div>
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Orders</p>
+                <p className="text-sm font-medium text-muted-foreground">
+                  {dateFilter === 'today' ? "Today's Orders" : 
+                   dateFilter === 'custom' && selectedDate ? `Orders on ${format(selectedDate, 'MMM dd')}` : 
+                   'Total Orders'}
+                </p>
                 <p className="text-2xl font-bold text-success">{totalOrders}</p>
               </div>
             </div>
@@ -112,7 +138,7 @@ export function DashboardTab({ user }: DashboardTabProps) {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Avg Order Value</p>
-                <p className="text-2xl font-bold text-warning">₹{totalOrders > 0 ? Math.round(totalSales / totalOrders) : 0}</p>
+                <p className="text-2xl font-bold text-warning">NRs {totalOrders > 0 ? Math.round(totalSales / totalOrders) : 0}</p>
               </div>
             </div>
           </CardContent>
@@ -141,6 +167,91 @@ export function DashboardTab({ user }: DashboardTabProps) {
                 )}
               </div>
             </CardTitle>
+            
+            {/* Date Filter Buttons */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <Button
+                variant={dateFilter === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  setDateFilter('all');
+                  setSelectedDate(undefined);
+                }}
+                className={`flex items-center space-x-2 ${
+                  dateFilter === 'all' 
+                    ? 'bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200' 
+                    : 'hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200'
+                }`}
+              >
+                <span>All Orders</span>
+              </Button>
+              
+              <Button
+                variant={dateFilter === 'today' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  setDateFilter('today');
+                  setSelectedDate(undefined);
+                }}
+                className={`flex items-center space-x-2 ${
+                  dateFilter === 'today' 
+                    ? 'bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200' 
+                    : 'hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200'
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+                <span>Today</span>
+              </Button>
+              
+              <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={dateFilter === 'custom' ? 'default' : 'outline'}
+                    size="sm"
+                    className={`flex items-center space-x-2 ${
+                      dateFilter === 'custom' 
+                        ? 'bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200' 
+                        : 'hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200'
+                    }`}
+                  >
+                    <CalendarDays className="w-4 h-4" />
+                    <span>
+                      {dateFilter === 'custom' && selectedDate
+                        ? format(selectedDate, 'MMM dd, yyyy')
+                        : 'Select Date'
+                      }
+                    </span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={(date) => {
+                      setSelectedDate(date);
+                      setDateFilter('custom');
+                      setIsCalendarOpen(false);
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              
+              {(dateFilter === 'today' || (dateFilter === 'custom' && selectedDate)) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setDateFilter('all');
+                    setSelectedDate(undefined);
+                  }}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Clear Filter
+                </Button>
+              )}
+            </div>
+            
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
@@ -176,7 +287,7 @@ export function DashboardTab({ user }: DashboardTabProps) {
                         <p className="font-medium">Order #{order.orderNumber}</p>
                         <Badge 
                           variant={order.status === 'completed' ? 'default' : 'secondary'}
-                          className={order.status === 'completed' ? 'bg-success text-white' : ''}
+                          className={order.status === 'completed' ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' : ''}
                         >
                           {order.status}
                         </Badge>
@@ -185,7 +296,7 @@ export function DashboardTab({ user }: DashboardTabProps) {
                         {format(order.date, 'PPp')}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {order.items.length} items • ₹{order.total}
+                        {order.items.length} items • NRs {order.total}
                       </p>
                     </div>
                     <Button
@@ -230,7 +341,7 @@ export function DashboardTab({ user }: DashboardTabProps) {
                       <p className="text-xs text-muted-foreground">Total Revenue</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-primary">₹{revenue as number}</p>
+                      <p className="font-bold text-primary">NRs {revenue as number}</p>
                     </div>
                   </div>
                 ))}
@@ -267,7 +378,7 @@ export function DashboardTab({ user }: DashboardTabProps) {
                 {selectedOrder.items.map((item, index) => (
                   <div key={index} className="flex justify-between text-sm">
                     <span>{item.name} x{item.quantity}</span>
-                    <span>₹{item.quantity * item.price}</span>
+                    <span>NRs {item.quantity * item.price}</span>
                   </div>
                 ))}
               </div>
@@ -275,17 +386,17 @@ export function DashboardTab({ user }: DashboardTabProps) {
               <div className="border-t pt-2 space-y-1">
                 <div className="flex justify-between text-sm">
                   <span>Subtotal</span>
-                  <span>₹{selectedOrder.subtotal}</span>
+                  <span>NRs {selectedOrder.subtotal}</span>
                 </div>
                 {selectedOrder.discount > 0 && (
                   <div className="flex justify-between text-sm">
                     <span>Discount</span>
-                    <span>-₹{selectedOrder.discount}</span>
+                    <span>-NRs {selectedOrder.discount}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold">
                   <span>Total</span>
-                  <span>₹{selectedOrder.total}</span>
+                  <span>NRs {selectedOrder.total}</span>
                 </div>
               </div>
             </CardContent>

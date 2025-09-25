@@ -5,8 +5,17 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Building2, User, Mail, Lock, MapPin, UserPlus } from 'lucide-react';
+import { Building2, User, Mail, Lock, MapPin, UserPlus, Phone, Camera } from 'lucide-react';
 import { AuthUser, UserRole } from '@/types/database';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { 
+  validateEmail, 
+  validateNepaliPhoneNumber, 
+  validateFullName, 
+  validateProfilePhotoUrl,
+  validateHotelName,
+  validateHotelLocation 
+} from '@/utils/validation';
 
 interface LoginFormProps {
   onLogin: (user: AuthUser) => void;
@@ -16,7 +25,10 @@ export function LoginForm({ onLogin }: LoginFormProps) {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<UserRole>('owner');
+  const [role] = useState<UserRole>('owner'); // Only owners can self-register
+  const [fullName, setFullName] = useState('');
+  const [contactNo, setContactNo] = useState('');
+  const [profilePhoto, setProfilePhoto] = useState('');
   const [hotelName, setHotelName] = useState('');
   const [hotelLocation, setHotelLocation] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -27,18 +39,73 @@ export function LoginForm({ onLogin }: LoginFormProps) {
     setIsLoading(true);
 
     try {
-      // Check if user exists in our users table
-      const { data: users, error: userError } = await supabase
+      // Debug logging
+      console.log('Login attempt:', { email, password: '***masked***' });
+      
+      // First, test database connection by getting all users (for debugging)
+      const { data: allUsers, error: testError } = await supabase
+        .from('users')
+        .select('email, role')
+        .limit(5);
+      
+      console.log('Database connection test:', { 
+        allUsers, 
+        testError,
+        connectionWorking: !testError && Array.isArray(allUsers)
+      });
+      
+      // First check if user exists by email only (for debugging)
+      const { data: emailCheck, error: emailError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .limit(1);
+      
+      console.log('Email check:', { 
+        emailFound: emailCheck && emailCheck.length > 0,
+        userCount: emailCheck?.length,
+        emailError 
+      });
+      
+      // Now check with email + password
+      const { data: userResults, error: userError } = await supabase
         .from('users')
         .select('*')
         .eq('email', email)
         .eq('password', password)
-        .single();
+        .limit(1);
+      
+      // Take the first user if multiple exist
+      const users = userResults && userResults.length > 0 ? userResults[0] : null;
+
+      // Debug logging
+      console.log('Database response:', { 
+        data: users, 
+        error: userError,
+        hasData: !!users,
+        errorCode: userError?.code,
+        errorMessage: userError?.message 
+      });
 
       if (userError || !users) {
+        console.log('Login failed - no matching user found');
         toast({
           title: "Login failed",
-          description: "Invalid email or password.",
+          description: `Invalid email or password. Error: ${userError?.message || 'No user found'}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Check approval status for owners
+      if (users.role === 'owner' && users.approval_status !== 'approved') {
+        const statusMessage = users.approval_status === 'pending' 
+          ? "Your account is pending admin approval. Please wait for confirmation."
+          : "Your account has been rejected. Please contact support.";
+        
+        toast({
+          title: "Access Denied",
+          description: statusMessage,
           variant: "destructive",
         });
         return;
@@ -49,11 +116,18 @@ export function LoginForm({ onLogin }: LoginFormProps) {
         description: `Welcome ${users.role}!`,
       });
       
+      // Debug: Check what fields are available
+      console.log('Available user fields:', Object.keys(users));
+      console.log('Full user object:', users);
+      
       // Create AuthUser object
       const authUser: AuthUser = {
         id: users.id,
         email: users.email,
         role: users.role as UserRole,
+        full_name: (users as any).full_name || undefined,
+        contact_no: (users as any).contact_no || undefined,
+        profile_photo_url: (users as any).profile_photo_url || undefined,
         hotel_name: users.hotel_name || undefined,
         hotel_location: users.hotel_location || undefined,
       };
@@ -74,6 +148,76 @@ export function LoginForm({ onLogin }: LoginFormProps) {
     e.preventDefault();
     setIsLoading(true);
 
+    // Validate all fields
+    const emailValidation = validateEmail(email);
+    const nameValidation = validateFullName(fullName);
+    const phoneValidation = validateNepaliPhoneNumber(contactNo);
+    const photoValidation = validateProfilePhotoUrl(profilePhoto);
+    const hotelNameValidation = validateHotelName(hotelName);
+    const hotelLocationValidation = validateHotelLocation(hotelLocation);
+
+    if (!emailValidation.isValid) {
+      toast({
+        title: "Registration failed",
+        description: emailValidation.message,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    if (!nameValidation.isValid) {
+      toast({
+        title: "Registration failed",
+        description: nameValidation.message,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    if (!phoneValidation.isValid) {
+      toast({
+        title: "Registration failed",
+        description: phoneValidation.message,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    if (!photoValidation.isValid) {
+      toast({
+        title: "Registration failed",
+        description: photoValidation.message,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    if (role === 'owner') {
+      if (!hotelNameValidation.isValid) {
+        toast({
+          title: "Registration failed",
+          description: hotelNameValidation.message,
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      if (!hotelLocationValidation.isValid) {
+        toast({
+          title: "Registration failed",
+          description: hotelLocationValidation.message,
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+    }
+
     try {
       // Check if user already exists
       const { data: existingUser } = await supabase
@@ -91,15 +235,19 @@ export function LoginForm({ onLogin }: LoginFormProps) {
         return;
       }
 
-      // Create new user
+      // Create new user with pending approval status for owners
       const { error } = await supabase
         .from('users')
         .insert({
-          email,
+          email: email.trim().toLowerCase(),
           password,
           role,
-          hotel_name: role === 'owner' ? hotelName : null,
-          hotel_location: role === 'owner' ? hotelLocation : null,
+          full_name: fullName.trim(),
+          contact_no: contactNo.replace(/[\s\-\(\)]/g, ''), // Clean phone number
+          profile_photo_url: profilePhoto.trim() || null,
+          hotel_name: role === 'owner' ? hotelName.trim() : null,
+          hotel_location: role === 'owner' ? hotelLocation.trim() : null,
+          approval_status: role === 'owner' ? 'pending' : 'approved', // Owners need approval, admins auto-approved
         });
 
       if (error) {
@@ -113,7 +261,9 @@ export function LoginForm({ onLogin }: LoginFormProps) {
 
       toast({
         title: "Registration successful",
-        description: "Account created successfully! Please login.",
+        description: role === 'owner' 
+          ? "Account created successfully! Your registration is pending admin approval. You will be notified once approved."
+          : "Account created successfully! Please login.",
       });
 
       // Switch to login mode
@@ -132,18 +282,22 @@ export function LoginForm({ onLogin }: LoginFormProps) {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
-      <Card className="w-full max-w-md shadow-professional">
-        <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-primary to-primary-hover rounded-xl flex items-center justify-center">
-            <Building2 className="w-8 h-8 text-primary-foreground" />
-          </div>
-          <div>
-            <CardTitle className="text-2xl font-bold">Restaurant POS</CardTitle>
-            <CardDescription className="text-muted-foreground">
-              Professional billing & order management system
-            </CardDescription>
-          </div>
-        </CardHeader>
+      <div className="relative w-full max-w-md">
+        <div className="absolute top-0 right-0 z-10">
+          <ThemeToggle />
+        </div>
+        <Card className="w-full shadow-professional">
+          <CardHeader className="text-center space-y-4">
+            <div className="mx-auto w-16 h-16 bg-gradient-to-br from-primary to-primary-hover rounded-xl flex items-center justify-center">
+              <Building2 className="w-8 h-8 text-primary-foreground" />
+            </div>
+            <div>
+              <CardTitle className="text-2xl font-bold">Restaurant POS</CardTitle>
+              <CardDescription className="text-muted-foreground">
+                Professional billing & order management system
+              </CardDescription>
+            </div>
+          </CardHeader>
         <CardContent>
           <form onSubmit={isRegistering ? handleRegister : handleLogin} className="space-y-4">
             <div className="space-y-2">
@@ -181,31 +335,73 @@ export function LoginForm({ onLogin }: LoginFormProps) {
             {isRegistering && (
               <>
                 <div className="space-y-2">
+                  <Label htmlFor="fullName">Full Name *</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="fullName"
+                      type="text"
+                      placeholder="Enter your full name"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="pl-10"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="contactNo">Contact Number *</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="contactNo"
+                      type="tel"
+                      placeholder="Enter your contact number"
+                      value={contactNo}
+                      onChange={(e) => setContactNo(e.target.value)}
+                      className="pl-10"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="profilePhoto">Profile Photo URL (Optional)</Label>
+                  <div className="relative">
+                    <Camera className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="profilePhoto"
+                      type="url"
+                      placeholder="Enter profile photo URL"
+                      value={profilePhoto}
+                      onChange={(e) => setProfilePhoto(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    💡 You can upload your photo to any image hosting service and paste the URL here
+                  </p>
+                </div>
+
+                <div className="space-y-2">
                   <Label>Account Type</Label>
                   <div className="flex space-x-4">
-                    <label className="flex items-center space-x-2 cursor-pointer">
+                    <label className="flex items-center space-x-2">
                       <input
                         type="radio"
                         name="role"
                         value="owner"
-                        checked={role === 'owner'}
-                        onChange={(e) => setRole(e.target.value as 'admin' | 'owner')}
+                        checked={true}
+                        readOnly
                         className="text-primary"
                       />
-                      <span className="text-sm">Hotel Owner</span>
-                    </label>
-                    <label className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="role"
-                        value="admin"
-                        checked={role === 'admin'}
-                        onChange={(e) => setRole(e.target.value as 'admin' | 'owner')}
-                        className="text-primary"
-                      />
-                      <span className="text-sm">Admin</span>
+                      <span className="text-sm">Restaurant Owner</span>
                     </label>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    💡 Admin accounts can only be created by existing administrators
+                  </p>
                 </div>
 
                 {role === 'owner' && (
@@ -270,6 +466,9 @@ export function LoginForm({ onLogin }: LoginFormProps) {
               onClick={() => {
                 setIsRegistering(!isRegistering);
                 setPassword('');
+                setFullName('');
+                setContactNo('');
+                setProfilePhoto('');
                 setHotelName('');
                 setHotelLocation('');
               }}
@@ -281,7 +480,8 @@ export function LoginForm({ onLogin }: LoginFormProps) {
             </Button>
           </div>
         </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

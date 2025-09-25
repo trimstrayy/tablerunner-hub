@@ -146,10 +146,33 @@ export const useOrders = (ownerId?: string) => {
         query = query.eq('owner_id', ownerId);
       }
       
-      const { data, error } = await query.order('created_at', { ascending: false });
+      const { data, error } = await query.order('order_number', { ascending: false });
       
       if (error) throw error;
       return data;
+    },
+    enabled: !!ownerId,
+  });
+};
+
+// Get next sequential order number for a specific owner
+export const useNextOrderNumber = (ownerId?: string) => {
+  return useQuery({
+    queryKey: ['next-order-number', ownerId],
+    queryFn: async () => {
+      if (!ownerId) return 1;
+      
+      const { data, error } = await supabase
+        .from('orders')
+        .select('order_number')
+        .eq('owner_id', ownerId)
+        .order('order_number', { ascending: false })
+        .limit(1);
+      
+      if (error) throw error;
+      
+      // If no orders exist, start from 1, otherwise increment the highest order number
+      return data.length > 0 ? data[0].order_number + 1 : 1;
     },
     enabled: !!ownerId,
   });
@@ -192,6 +215,7 @@ export const useCreateOrder = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['next-order-number'] });
       toast({
         title: "Order saved",
         description: `Order #${data.order_number} has been saved successfully.`,

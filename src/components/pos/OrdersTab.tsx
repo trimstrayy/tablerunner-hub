@@ -9,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Plus, Minus, Save, X, Edit3, Trash2, Settings, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AuthUser, MenuItem, CartItem } from '@/types/database';
-import { useMenuItems, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem, useCreateOrder } from '@/hooks/useSupabase';
+import { useMenuItems, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem, useCreateOrder, useNextOrderNumber } from '@/hooks/useSupabase';
 
-const categories = ['All', 'Tea', 'Drinks', 'Snacks', 'Main Course', 'Desserts'];
+const categories = ['All', 'Tea', 'Snacks', 'Ice Cream', 'Cold Drink', 'Lemon Drink', 'Bakery'];
 
 interface OrdersTabProps {
   user: AuthUser;
@@ -21,7 +21,6 @@ export function OrdersTab({ user }: OrdersTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [orderItems, setOrderItems] = useState<CartItem[]>([]);
-  const [orderNumber] = useState(() => Math.floor(Math.random() * 1000) + 1000);
   const [discount, setDiscount] = useState(0);
   const [isEditingMenu, setIsEditingMenu] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -36,10 +35,46 @@ export function OrdersTab({ user }: OrdersTabProps) {
 
   // Supabase hooks
   const { data: menuItems = [], isLoading: isLoadingMenu, refetch: refetchMenu } = useMenuItems(user.id);
+  const { data: nextOrderNumber = 1 } = useNextOrderNumber(user.id);
   const createMenuItem = useCreateMenuItem();
   const updateMenuItem = useUpdateMenuItem();
   const deleteMenuItem = useDeleteMenuItem();
   const createOrder = useCreateOrder();
+
+  // Keyboard shortcut for milk tea
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      // Only trigger if not typing in an input field
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
+      if (event.key.toLowerCase() === 't') {
+        // Find the first milk tea item
+        const milkTeaItem = menuItems.find(item => 
+          item.name.toLowerCase().includes('milk tea') || 
+          item.name.toLowerCase().includes('milktea')
+        );
+        
+        if (milkTeaItem) {
+          addToOrder(milkTeaItem);
+          toast({
+            title: "Quick add",
+            description: `${milkTeaItem.name} added to order with keyboard shortcut 'T'`,
+          });
+        } else {
+          toast({
+            title: "No milk tea found",
+            description: "Add a milk tea item to your menu to use this shortcut",
+            variant: "destructive",
+          });
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, [menuItems, toast]);
 
   const filteredItems = menuItems.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -86,6 +121,15 @@ export function OrdersTab({ user }: OrdersTabProps) {
     setOrderItems(prev => prev.filter(item => item.id !== id));
   };
 
+  const clearAllItems = () => {
+    setOrderItems([]);
+    setDiscount(0);
+    toast({
+      title: "Order cleared",
+      description: "All items have been removed from the order.",
+    });
+  };
+
   const subtotal = orderItems.reduce((sum, item) => sum + item.total, 0);
   const total = subtotal - discount;
 
@@ -101,7 +145,7 @@ export function OrdersTab({ user }: OrdersTabProps) {
 
     try {
       const orderData = {
-        order_number: orderNumber,
+        order_number: nextOrderNumber,
         owner_id: user.id,
         subtotal,
         discount,
@@ -264,8 +308,9 @@ export function OrdersTab({ user }: OrdersTabProps) {
               </div>
             </div>
             
-            {/* Menu Items Grid */}
+            {/* Menu Items Container with Scrolling */}
             <div className="flex-1">
+              {/* Fixed Edit Menu Section */}
               {isEditingMenu && (
                 <div className="border rounded-lg p-4 bg-muted/50 mb-4">
                   <div className="flex items-center justify-between mb-4">
@@ -355,13 +400,15 @@ export function OrdersTab({ user }: OrdersTabProps) {
                 </div>
               )}
               
-              {isLoadingMenu ? (
+              {/* Scrollable Menu Items Grid */}
+              <div className="h-[calc(100vh-20rem)] overflow-y-auto p-2">
+                {isLoadingMenu ? (
                 <div className="flex items-center justify-center py-8">
                   <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
                   <span className="ml-2 text-muted-foreground">Loading menu...</span>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-2">
                   {filteredItems.map(item => (
                     <div 
                       key={item.id} 
@@ -381,7 +428,7 @@ export function OrdersTab({ user }: OrdersTabProps) {
                           <Badge variant="secondary" className="text-xs font-medium">
                             {item.category}
                           </Badge>
-                          <p className="text-lg font-bold text-primary">₹{item.price}</p>
+                          <p className="text-lg font-bold text-primary">NRs {item.price}</p>
                         </div>
                       </div>
                       
@@ -419,21 +466,22 @@ export function OrdersTab({ user }: OrdersTabProps) {
                   ))}
                 </div>
               )}
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Order Section - Smaller */}
-      <Card className="shadow-card">
-        <CardHeader className="pb-3">
+      {/* Order Section - Fixed */}
+      <Card className="shadow-card flex flex-col h-fit max-h-full">
+        <CardHeader className="pb-3 flex-shrink-0">
           <CardTitle className="flex items-center justify-between text-lg">
             <span>Order</span>
-            <Badge variant="outline" className="text-xs">#{orderNumber}</Badge>
+            <Badge variant="outline" className="text-xs">#{nextOrderNumber}</Badge>
           </CardTitle>
         </CardHeader>
         
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 flex-1 overflow-hidden flex flex-col">
           {orderItems.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground">
               <p className="text-sm">No items in order</p>
@@ -441,12 +489,12 @@ export function OrdersTab({ user }: OrdersTabProps) {
             </div>
           ) : (
             <>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
+              <div className="space-y-2 flex-1 overflow-y-auto">
                 {orderItems.map(item => (
                   <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg text-sm">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">₹{item.unitPrice} each</p>
+                      <p className="text-xs text-muted-foreground">NRs {item.unitPrice} each</p>
                     </div>
                     <div className="flex items-center space-x-2 ml-2">
                       <div className="flex items-center space-x-1">
@@ -468,7 +516,7 @@ export function OrdersTab({ user }: OrdersTabProps) {
                           <Plus className="w-3 h-3" />
                         </Button>
                       </div>
-                      <p className="font-semibold text-xs min-w-[2.5rem] text-right">₹{item.total}</p>
+                      <p className="font-semibold text-xs min-w-[2.5rem] text-right">NRs {item.total}</p>
                       <Button
                         size="sm"
                         variant="outline"
@@ -482,56 +530,70 @@ export function OrdersTab({ user }: OrdersTabProps) {
                 ))}
               </div>
 
-              <Separator />
+              <div className="flex-shrink-0 space-y-3 mt-auto">
+                <Separator />
 
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span className="font-semibold">₹{subtotal}</span>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="discount" className="text-xs">Discount:</Label>
-                  <div className="flex items-center space-x-1">
-                    <Input
-                      id="discount"
-                      type="number"
-                      step="0.01"
-                      value={discount}
-                      onChange={(e) => setDiscount(Number(e.target.value))}
-                      className="w-16 h-6 text-xs text-right"
-                      placeholder="0"
-                    />
-                    <span className="text-xs">₹</span>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span className="font-semibold">NRs {subtotal}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="discount" className="text-xs">Discount:</Label>
+                    <div className="flex items-center space-x-1">
+                      <Input
+                        id="discount"
+                        type="number"
+                        step="5"
+                        value={discount}
+                        onChange={(e) => setDiscount(Number(e.target.value))}
+                        className="w-16 h-6 text-xs text-right"
+                        placeholder="0"
+                      />
+                      <span className="text-xs">Rs.</span>
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="flex justify-between font-bold">
+                    <span>Total:</span>
+                    <span className="text-primary">NRs {total}</span>
                   </div>
                 </div>
-                
-                <Separator />
-                
-                <div className="flex justify-between font-bold">
-                  <span>Total:</span>
-                  <span className="text-primary">₹{total}</span>
+
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={clearAllItems}
+                    variant="outline"
+                    className="flex-1 hover:bg-destructive hover:text-destructive-foreground"
+                    size="sm"
+                    disabled={orderItems.length === 0}
+                  >
+                    <Trash2 className="w-3 h-3 mr-2" />
+                    Clear All
+                  </Button>
+                  <Button 
+                    onClick={handleSaveOrder}
+                    className="flex-1"
+                    size="sm"
+                    disabled={createOrder.isPending || orderItems.length === 0}
+                  >
+                    {createOrder.isPending ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-3 h-3 mr-2" />
+                        Save Order
+                      </>
+                    )}
+                  </Button>
                 </div>
               </div>
-
-              <Button 
-                onClick={handleSaveOrder}
-                className="w-full"
-                size="sm"
-                disabled={createOrder.isPending}
-              >
-                {createOrder.isPending ? (
-                  <>
-                    <RefreshCw className="w-3 h-3 mr-2 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-3 h-3 mr-2" />
-                    Save Order
-                  </>
-                )}
-              </Button>
             </>
           )}
         </CardContent>

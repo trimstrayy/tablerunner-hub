@@ -136,29 +136,47 @@ export type Database = {
         Row: {
           created_at: string | null
           email: string
+          full_name: string | null
+          contact_no: string | null
+          profile_photo_url: string | null
           hotel_location: string | null
           hotel_name: string | null
           id: string
           password: string
           role: string
+          approval_status: string | null
+          approved_at: string | null
+          approved_by: string | null
         }
         Insert: {
           created_at?: string | null
           email: string
+          full_name?: string | null
+          contact_no?: string | null
+          profile_photo_url?: string | null
           hotel_location?: string | null
           hotel_name?: string | null
           id?: string
           password: string
           role: string
+          approval_status?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
         }
         Update: {
           created_at?: string | null
           email?: string
+          full_name?: string | null
+          contact_no?: string | null
+          profile_photo_url?: string | null
           hotel_location?: string | null
           hotel_name?: string | null
           id?: string
           password?: string
           role?: string
+          approval_status?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
         }
         Relationships: []
       }

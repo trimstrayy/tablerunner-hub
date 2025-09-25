@@ -19,13 +19,20 @@ export type MenuItemUpdate = Database['public']['Tables']['menu_items']['Update'
 
 // Extended types for frontend use
 export type UserRole = 'admin' | 'owner';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
 export interface AuthUser {
   id: string;
   email: string;
   role: UserRole;
+  full_name?: string;
+  contact_no?: string;
+  profile_photo_url?: string;
   hotel_name?: string;
   hotel_location?: string;
+  approval_status?: ApprovalStatus;
+  approved_at?: string;
+  approved_by?: string;
 }
 
 export interface OrderWithItems extends Order {

@@ -1,5 +1,21 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+*.tsbuildinfo
+
+# Development
+.cache/
+.vite/
+.turbo/
+
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,18 +23,149 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output/
+
+# ESLint cache
+.eslintcache
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# CRITICAL: Environment Variables & API Keys
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+.env.staging
+.env.*.local
+
+# API Keys and Secrets
+**/api-keys.json
+**/secrets.json
+**/credentials.json
+*.key
+*.pem
+*.p12
+*.crt
+*.cer
+*.pfx
+config/local.json
+config/production.json
+config/development.json
+
+# Supabase Local Development
+.supabase/
+supabase/.env
+supabase/config.toml.backup
+
+# Firebase
+.firebase/
+firebase-debug.log
+.firebaserc.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Security & Authentication
+auth.json
+jwt-secret.txt
+private-key.*
+public-key.*
+
+# Deployment & Infrastructure
+deployment-report.json
+.vercel/
+.netlify/
+.serverless/
+terraform.tfstate*
+*.tfvars
+
+# Testing
+coverage/
+.jest/
+test-results/
+playwright-report/
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Package manager files
+yarn.lock
+package-lock.json
+pnpm-lock.yaml
+bun.lockb
+
+# Backup files
+*.backup
+*.bak
+*.orig
+
+# Local configuration overrides
+*local.config.*
+*local.settings.*
