@@ -12,7 +12,7 @@ import {
 } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 
-// Menu Items Hooks
+// Menu Items Hooks - Optimized with caching
 export const useMenuItems = (ownerId?: string) => {
   return useQuery({
     queryKey: ['menu-items', ownerId],
@@ -29,6 +29,9 @@ export const useMenuItems = (ownerId?: string) => {
       return data as MenuItem[];
     },
     enabled: !!ownerId,
+    staleTime: 5 * 60 * 1000, // 5 minutes - menu items don't change frequently
+    cacheTime: 10 * 60 * 1000, // 10 minutes in cache
+    refetchOnWindowFocus: false, // Don't refetch when user returns to tab
   });
 };
 

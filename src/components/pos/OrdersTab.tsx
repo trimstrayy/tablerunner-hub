@@ -22,6 +22,7 @@ export function OrdersTab({ user }: OrdersTabProps) {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [orderItems, setOrderItems] = useState<CartItem[]>([]);
   const [discount, setDiscount] = useState(0);
+  const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
   const [isEditingMenu, setIsEditingMenu] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [isAddingItem, setIsAddingItem] = useState(false);
@@ -124,6 +125,7 @@ export function OrdersTab({ user }: OrdersTabProps) {
   const clearAllItems = () => {
     setOrderItems([]);
     setDiscount(0);
+    setDiscountType('fixed');
     toast({
       title: "Order cleared",
       description: "All items have been removed from the order.",
@@ -131,7 +133,10 @@ export function OrdersTab({ user }: OrdersTabProps) {
   };
 
   const subtotal = orderItems.reduce((sum, item) => sum + item.total, 0);
-  const total = subtotal - discount;
+  const discountAmount = discountType === 'percentage' 
+    ? (subtotal * discount / 100) 
+    : discount;
+  const total = Math.max(0, subtotal - discountAmount);
 
   const handleSaveOrder = async () => {
     if (orderItems.length === 0) {
@@ -148,7 +153,7 @@ export function OrdersTab({ user }: OrdersTabProps) {
         order_number: nextOrderNumber,
         owner_id: user.id,
         subtotal,
-        discount,
+        discount: discountAmount,
         total,
       };
 
@@ -167,6 +172,7 @@ export function OrdersTab({ user }: OrdersTabProps) {
       // Clear the order
       setOrderItems([]);
       setDiscount(0);
+      setDiscountType('fixed');
     } catch (error) {
       console.error('Error saving order:', error);
     }
@@ -539,20 +545,50 @@ export function OrdersTab({ user }: OrdersTabProps) {
                     <span className="font-semibold">NRs {subtotal}</span>
                   </div>
                   
-                  <div className="flex items-center justify-between">
+                  <div className="space-y-2">
                     <Label htmlFor="discount" className="text-xs">Discount:</Label>
                     <div className="flex items-center space-x-1">
+                      <Select value={discountType} onValueChange={(value: 'fixed' | 'percentage') => {
+                        setDiscountType(value);
+                        // Reset discount when switching types to avoid invalid values
+                        if (value === 'percentage' && discount > 100) {
+                          setDiscount(0);
+                        }
+                      }}>
+                        <SelectTrigger className="w-16 h-6 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fixed">Rs</SelectItem>
+                          <SelectItem value="percentage">%</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Input
                         id="discount"
                         type="number"
-                        step="5"
+                        step={discountType === 'percentage' ? "1" : "5"}
+                        min="0"
+                        max={discountType === 'percentage' ? "100" : undefined}
                         value={discount}
-                        onChange={(e) => setDiscount(Number(e.target.value))}
+                        onChange={(e) => {
+                          const value = Number(e.target.value);
+                          if (value >= 0) {
+                            if (discountType === 'percentage' && value <= 100) {
+                              setDiscount(value);
+                            } else if (discountType === 'fixed') {
+                              setDiscount(value);
+                            }
+                          }
+                        }}
                         className="w-16 h-6 text-xs text-right"
                         placeholder="0"
                       />
-                      <span className="text-xs">Rs.</span>
                     </div>
+                    {discountType === 'percentage' && discount > 0 && (
+                      <div className="text-xs text-muted-foreground">
+                        {discount}% = Rs {discountAmount.toFixed(0)}
+                      </div>
+                    )}
                   </div>
                   
                   <Separator />

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -8,8 +8,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Search, Building2, MapPin, Mail, Users, RefreshCw, Shield, Rocket, Clock, CheckCircle, XCircle, User, Phone } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { DeploymentChecklist } from './DeploymentChecklist';
 import { ThemeToggle } from '@/components/theme-toggle';
+
+// Lazy load heavy components
+const AdminAnalytics = lazy(() => import('./AdminAnalytics').then(module => ({ default: module.AdminAnalytics })));
+const DeploymentChecklist = lazy(() => import('./DeploymentChecklist').then(module => ({ default: module.DeploymentChecklist })));
 
 // Custom type for owner data with all fields
 interface OwnerData {
@@ -42,6 +45,80 @@ export function AdminDashboard({ userEmail, onLogout }: AdminDashboardProps) {
   const [pendingSearchTerm, setPendingSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('owners');
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [userAnalytics, setUserAnalytics] = useState<Map<string, any>>(new Map());
+  const [activeUsers, setActiveUsers] = useState<Set<string>>(new Set());
+
+  const fetchUserAnalytics = async (userId: string) => {
+    try {
+      // Fetch user orders
+      const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select('*, order_items(*)')
+        .eq('owner_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (ordersError) throw ordersError;
+
+      // Calculate analytics
+      const totalOrders = orders?.length || 0;
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      
+      const ordersToday = orders?.filter(order => 
+        new Date(order.created_at) >= todayStart
+      ).length || 0;
+
+      const lastOrderDate = orders?.[0]?.created_at || null;
+      
+      // Calculate unique days with orders (active days)
+      const activeDays = new Set(
+        orders?.map(order => new Date(order.created_at).toDateString()) || []
+      ).size;
+
+      // Estimate usage hours (assume 2 hours per active day)
+      const estimatedHours = activeDays * 2;
+
+      // Get first order date to calculate total days since registration
+      const firstOrderDate = orders?.[orders.length - 1]?.created_at;
+      const daysSinceFirstOrder = firstOrderDate 
+        ? Math.ceil((Date.now() - new Date(firstOrderDate).getTime()) / (1000 * 60 * 60 * 24))
+        : 0;
+
+      const analytics = {
+        totalOrders,
+        ordersToday,
+        lastOrderDate,
+        activeDays,
+        estimatedHours,
+        daysSinceFirstOrder,
+        avgOrdersPerDay: daysSinceFirstOrder > 0 ? (totalOrders / daysSinceFirstOrder).toFixed(1) : '0'
+      };
+
+      setUserAnalytics(prev => new Map(prev.set(userId, analytics)));
+    } catch (error) {
+      console.error('Error fetching user analytics:', error);
+    }
+  };
+
+  const checkActiveUsers = async () => {
+    try {
+      // Check for recent activity (orders in last 30 minutes)
+      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+      
+      const { data: recentOrders, error } = await supabase
+        .from('orders')
+        .select('owner_id')
+        .gte('created_at', thirtyMinutesAgo.toISOString());
+
+      if (error) throw error;
+
+      const activeUserIds = new Set(recentOrders?.map(order => order.owner_id) || []);
+      setActiveUsers(activeUserIds);
+    } catch (error) {
+      console.error('Error checking active users:', error);
+    }
+  };
 
   const fetchOwners = async () => {
     setIsLoading(true);
@@ -74,6 +151,9 @@ export function AdminDashboard({ userEmail, onLogout }: AdminDashboardProps) {
       setPendingOwners((pendingData as any) || []);
       setFilteredOwners((approvedData as any) || []);
       setFilteredPendingOwners((pendingData as any) || []);
+
+      // Check for active users
+      await checkActiveUsers();
     } catch (error: any) {
       toast({
         title: "Error loading owners",
@@ -85,8 +165,29 @@ export function AdminDashboard({ userEmail, onLogout }: AdminDashboardProps) {
     }
   };
 
+  const toggleCardExpansion = async (userId: string) => {
+    const newExpanded = new Set(expandedCards);
+    
+    if (expandedCards.has(userId)) {
+      newExpanded.delete(userId);
+    } else {
+      newExpanded.add(userId);
+      // Fetch analytics when expanding
+      if (!userAnalytics.has(userId)) {
+        await fetchUserAnalytics(userId);
+      }
+    }
+    
+    setExpandedCards(newExpanded);
+  };
+
   useEffect(() => {
     fetchOwners();
+    
+    // Set up interval to check for active users every 5 minutes
+    const interval = setInterval(checkActiveUsers, 5 * 60 * 1000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   // Auto-switch to owners tab if currently on pending tab but no pending owners
@@ -278,7 +379,7 @@ export function AdminDashboard({ userEmail, onLogout }: AdminDashboardProps) {
       {/* Main Content */}
       <div className="container mx-auto p-4 md:p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className={`grid w-full ${pendingOwners.length > 0 ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-2'} h-auto md:h-10`}>
+          <TabsList className={`grid w-full ${pendingOwners.length > 0 ? 'grid-cols-1 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'} h-auto md:h-10`}>
             <TabsTrigger value="owners" className="flex items-center justify-center space-x-2 py-2">
               <Users className="w-4 h-4" />
               <span className="hidden sm:inline">Restaurant Owners</span>
@@ -291,6 +392,10 @@ export function AdminDashboard({ userEmail, onLogout }: AdminDashboardProps) {
                 <span className="sm:hidden">Pending ({pendingOwners.length})</span>
               </TabsTrigger>
             )}
+            <TabsTrigger value="analytics" className="flex items-center justify-center space-x-2 py-2">
+              <Shield className="w-4 h-4" />
+              <span>Analytics</span>
+            </TabsTrigger>
             <TabsTrigger value="deployment" className="flex items-center justify-center space-x-2 py-2">
               <Rocket className="w-4 h-4" />
               <span>Deployment</span>
@@ -343,72 +448,153 @@ export function AdminDashboard({ userEmail, onLogout }: AdminDashboardProps) {
                   </div>
                 ) : (
                   <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {filteredOwners.map((owner) => (
-                      <Card key={owner.id} className="border border-border/50 hover:shadow-lg transition-shadow">
-                        <CardContent className="p-6">
-                          <div className="space-y-4">
-                            {/* Profile Header */}
-                            <div className="flex items-center space-x-4">
-                              <Avatar className="h-16 w-16 ring-2 ring-primary/10">
-                                <AvatarImage src={owner.profile_photo_url || undefined} alt={owner.full_name || owner.email} />
-                                <AvatarFallback>
-                                  <User className="h-8 w-8" />
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-lg truncate">
-                                  {owner.full_name || 'No Name Provided'}
-                                </h3>
-                                <div className="flex items-center space-x-2 mt-1">
-                                  <Badge variant="secondary" className="text-xs">Restaurant Owner</Badge>
+                    {filteredOwners.map((owner) => {
+                      const isExpanded = expandedCards.has(owner.id);
+                      const isActive = activeUsers.has(owner.id);
+                      const analytics = userAnalytics.get(owner.id);
+                      
+                      return (
+                        <Card 
+                          key={owner.id} 
+                          className="border border-border/50 hover:shadow-lg transition-all duration-200 cursor-pointer"
+                          onClick={() => toggleCardExpansion(owner.id)}
+                        >
+                          <CardContent className="p-6">
+                            <div className="space-y-4">
+                              {/* Profile Header */}
+                              <div className="flex items-center space-x-4">
+                                <div className="relative">
+                                  <Avatar className="h-16 w-16 ring-2 ring-primary/10">
+                                    <AvatarImage src={owner.profile_photo_url || undefined} alt={owner.full_name || owner.email} />
+                                    <AvatarFallback>
+                                      <User className="h-8 w-8" />
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  {/* Active Status Indicator */}
+                                  {isActive && (
+                                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full flex items-center justify-center">
+                                      <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-semibold text-lg truncate">
+                                    {owner.full_name || 'No Name Provided'}
+                                  </h3>
+                                  <div className="flex items-center space-x-2 mt-1">
+                                    <Badge variant="secondary" className="text-xs">Restaurant Owner</Badge>
+                                    {isActive && (
+                                      <Badge variant="default" className="text-xs bg-green-500 hover:bg-green-600">
+                                        🟢 Online
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                                {/* Expand/Collapse Icon */}
+                                <div className="text-muted-foreground">
+                                  {isExpanded ? (
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                    </svg>
+                                  ) : (
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                  )}
                                 </div>
                               </div>
-                            </div>
 
-                            {/* Contact Information */}
-                            <div className="space-y-2">
-                              <div className="flex items-center space-x-2">
-                                <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                                <span className="text-sm truncate">{owner.email}</span>
-                              </div>
-                              
-                              {owner.contact_no && (
+                              {/* Contact Information */}
+                              <div className="space-y-2">
                                 <div className="flex items-center space-x-2">
-                                  <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                                  <span className="text-sm font-mono">{owner.contact_no}</span>
+                                  <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                                  <span className="text-sm truncate">{owner.email}</span>
+                                </div>
+                                
+                                {owner.contact_no && (
+                                  <div className="flex items-center space-x-2">
+                                    <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                                    <span className="text-sm font-mono">{owner.contact_no}</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Hotel Information */}
+                              {(owner.hotel_name || owner.hotel_location) && (
+                                <div className="space-y-2 pt-2 border-t border-border/50">
+                                  {owner.hotel_name && (
+                                    <div className="flex items-center space-x-2">
+                                      <Building2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                                      <span className="text-sm font-medium">{owner.hotel_name}</span>
+                                    </div>
+                                  )}
+                                  
+                                  {owner.hotel_location && (
+                                    <div className="flex items-center space-x-2">
+                                      <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                                      <span className="text-sm text-muted-foreground">{owner.hotel_location}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {/* Registration Date */}
+                              <div className="pt-2">
+                                <Badge variant="outline" className="text-xs">
+                                  Registered: {new Date(owner.created_at || '').toLocaleDateString()}
+                                </Badge>
+                              </div>
+
+                              {/* Expanded Analytics Section */}
+                              {isExpanded && (
+                                <div className="pt-4 border-t border-border/50 space-y-4 animate-in slide-in-from-top-1 duration-200">
+                                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                                    📊 Usage Analytics
+                                  </h4>
+                                  
+                                  {analytics ? (
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div className="text-center p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                                        <div className="text-2xl font-bold text-blue-600">{analytics.totalOrders}</div>
+                                        <div className="text-xs text-blue-600">Total Orders</div>
+                                      </div>
+                                      
+                                      <div className="text-center p-3 bg-green-50 dark:bg-green-950 rounded-lg">
+                                        <div className="text-2xl font-bold text-green-600">{analytics.ordersToday}</div>
+                                        <div className="text-xs text-green-600">Orders Today</div>
+                                      </div>
+                                      
+                                      <div className="text-center p-3 bg-purple-50 dark:bg-purple-950 rounded-lg">
+                                        <div className="text-2xl font-bold text-purple-600">{analytics.activeDays}</div>
+                                        <div className="text-xs text-purple-600">Active Days</div>
+                                      </div>
+                                      
+                                      <div className="text-center p-3 bg-orange-50 dark:bg-orange-950 rounded-lg">
+                                        <div className="text-2xl font-bold text-orange-600">{analytics.estimatedHours}h</div>
+                                        <div className="text-xs text-orange-600">Est. Usage</div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-center py-4">
+                                      <RefreshCw className="w-4 h-4 animate-spin mx-auto mb-2" />
+                                      <p className="text-sm text-muted-foreground">Loading analytics...</p>
+                                    </div>
+                                  )}
+                                  
+                                  {analytics?.lastOrderDate && (
+                                    <div className="text-center p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                                      <p className="text-xs text-muted-foreground">
+                                        Last Order: {new Date(analytics.lastOrderDate).toLocaleString()}
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
-
-                            {/* Hotel Information */}
-                            {(owner.hotel_name || owner.hotel_location) && (
-                              <div className="space-y-2 pt-2 border-t border-border/50">
-                                {owner.hotel_name && (
-                                  <div className="flex items-center space-x-2">
-                                    <Building2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                                    <span className="text-sm font-medium">{owner.hotel_name}</span>
-                                  </div>
-                                )}
-                                
-                                {owner.hotel_location && (
-                                  <div className="flex items-center space-x-2">
-                                    <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                                    <span className="text-sm text-muted-foreground">{owner.hotel_location}</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            
-                            {/* Registration Date */}
-                            <div className="pt-2">
-                              <Badge variant="outline" className="text-xs">
-                                Registered: {new Date(owner.created_at || '').toLocaleDateString()}
-                              </Badge>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -528,8 +714,16 @@ export function AdminDashboard({ userEmail, onLogout }: AdminDashboardProps) {
             </TabsContent>
           )}
 
+          <TabsContent value="analytics">
+            <Suspense fallback={<div className="flex items-center justify-center p-8">Loading analytics...</div>}>
+              <AdminAnalytics onBack={() => setActiveTab('owners')} />
+            </Suspense>
+          </TabsContent>
+
           <TabsContent value="deployment">
-            <DeploymentChecklist />
+            <Suspense fallback={<div className="flex items-center justify-center p-8">Loading deployment...</div>}>
+              <DeploymentChecklist />
+            </Suspense>
           </TabsContent>
         </Tabs>
       </div>
