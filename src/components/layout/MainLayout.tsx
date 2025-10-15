@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { OrdersTab } from '@/components/pos/OrdersTab';
 import { DashboardTab } from '@/components/dashboard/DashboardTab';
+import InventoryPage from '@/pages/Inventory';
 import { Building2, LogOut, ShoppingCart, BarChart3, User } from 'lucide-react';
 import { AuthUser } from '@/types/database';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -76,7 +77,7 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
       {/* Main Content */}
       <div className="container mx-auto p-4 md:p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto bg-card shadow-card h-auto md:h-10">
+          <TabsList className="grid w-full grid-cols-3 max-w-md mx-auto bg-card shadow-card h-auto md:h-10">
             <TabsTrigger 
               value="orders" 
               className="flex items-center justify-center space-x-2 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -92,6 +93,13 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
               <BarChart3 className="w-4 h-4" />
               <span>Dashboard</span>
             </TabsTrigger>
+            <TabsTrigger
+              value="inventory"
+              className="flex items-center justify-center space-x-2 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <Building2 className="w-4 h-4" />
+              <span>Inventory</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="orders" className="space-y-0">
@@ -100,6 +108,12 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
 
           <TabsContent value="dashboard" className="space-y-0">
             <DashboardTab user={user} />
+          </TabsContent>
+
+          <TabsContent value="inventory" className="space-y-0">
+            <div className="py-4">
+              <InventoryPage />
+            </div>
           </TabsContent>
         </Tabs>
       </div>

@@ -185,17 +185,19 @@ export const useCreateOrder = () => {
   const { toast } = useToast();
   
   return useMutation({
+    // Accept a flexible order object (may include extra optional fields like customer_name/table)
     mutationFn: async ({ 
       order, 
       orderItems 
     }: { 
-      order: OrderInsert; 
+      order: any; 
       orderItems: Omit<OrderItemInsert, 'order_id'>[] 
     }) => {
       // Create the order first
+      // Cast to any to allow inserting optional fields that may not be present in generated types
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
-        .insert(order)
+        .insert(order as any)
         .select()
         .single();
       
@@ -255,13 +257,14 @@ export const useUpdateOrder = () => {
   const { toast } = useToast();
 
   return useMutation({
+    // Allow updates to include optional customer_name/table fields not present in generated types
     mutationFn: async ({
       orderId,
       updates,
       orderItems,
     }: {
       orderId: string;
-      updates: Partial<Order>;
+      updates: any;
       orderItems: Omit<OrderItemInsert, 'order_id'>[];
     }) => {
       // Delete existing order_items for this order
@@ -281,9 +284,10 @@ export const useUpdateOrder = () => {
       if (insertError) throw insertError;
 
       // Update order totals
+      // Cast updates to any so additional optional fields are accepted by Supabase client
       const { error: orderUpdateError } = await supabase
         .from('orders')
-        .update(updates)
+        .update(updates as any)
         .eq('id', orderId);
 
       if (orderUpdateError) throw orderUpdateError;

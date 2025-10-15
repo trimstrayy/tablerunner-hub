@@ -5,8 +5,10 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RefreshCw, Plus, Minus, X, Save } from 'lucide-react';
 import { useMenuItems, useUpdateOrder } from '@/hooks/useSupabase';
+import { useToast } from '@/hooks/use-toast';
 import { MenuItem } from '@/types/database';
 
 interface CartItem {
@@ -26,9 +28,13 @@ interface OrderEditModalProps {
 
 export default function OrderEditModal({ open, onClose, orderRow, ownerId }: OrderEditModalProps) {
   const [orderItems, setOrderItems] = useState<CartItem[]>([]);
+  const [customerName, setCustomerName] = useState<string | null>(null);
+  const [tableGroup, setTableGroup] = useState<string | null>(null);
+  const [tableNumber, setTableNumber] = useState<string | null>(null);
   const { data: menuItemsData = [], isLoading: isLoadingMenu } = useMenuItems(ownerId);
   const menuItems: MenuItem[] = (menuItemsData as MenuItem[]) || [];
   const updateOrder = useUpdateOrder();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!orderRow) return;
@@ -40,6 +46,10 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
       total: it.quantity * it.price,
     }));
     setOrderItems(initial);
+    // populate optional fields if present on the orderRow
+    setCustomerName(orderRow.customer_name || null);
+    setTableNumber(orderRow.table_number || null);
+    setTableGroup(orderRow.table_group || null);
   }, [orderRow]);
 
   const addToOrder = (menuItem: MenuItem) => {
@@ -67,6 +77,20 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
   const handleSave = async () => {
     if (!orderRow) return;
 
+    // Prevent editing orders older than 12 hours
+    const createdAt = orderRow.created_at ? new Date(orderRow.created_at) : null;
+    if (createdAt) {
+      const twelveHours = 12 * 60 * 60 * 1000;
+      if ((Date.now() - createdAt.getTime()) > twelveHours) {
+        toast({
+          title: 'Edit unavailable',
+          description: 'Orders older than 12 hours cannot be edited.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     const orderItemsPayload = orderItems.map(it => ({
       item_id: it.id,
       quantity: it.quantity,
@@ -78,6 +102,9 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
       subtotal,
       discount: orderRow.discount || 0,
       total: subtotal - (orderRow.discount || 0),
+      customer_name: customerName || null,
+      table_group: tableGroup || null,
+      table_number: tableNumber || null,
     };
 
     try {
@@ -120,6 +147,35 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
 
             <div className="lg:col-span-1">
               <h4 className="font-medium mb-2">Order</h4>
+              <div className="mb-3">
+                <Label className="text-xs">Customer name (optional)</Label>
+                <Input value={customerName ?? ''} onChange={(e) => setCustomerName(e.target.value || null)} className="text-sm" />
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="flex-1">
+                    <Label className="text-xs">Table group</Label>
+                    <Select value={tableGroup ?? ''} onValueChange={(v) => { setTableGroup(v || null); setTableNumber(null); }}>
+                      <SelectTrigger className="text-sm"><SelectValue placeholder="None" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="A">A</SelectItem>
+                        <SelectItem value="B">B</SelectItem>
+                        <SelectItem value="C">C</SelectItem>
+                        <SelectItem value="D">D</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-28">
+                    <Label className="text-xs">Table #</Label>
+                    <Select value={tableNumber ?? ''} onValueChange={(v) => setTableNumber(v || null)}>
+                      <SelectTrigger className="text-sm"><SelectValue placeholder="-" /></SelectTrigger>
+                      <SelectContent>
+                        {(tableGroup ? Array.from({ length: 5 }, (_, i) => `${tableGroup}${i+1}`) : []).map(t => (
+                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
               <div className="space-y-2 max-h-80 overflow-y-auto">
                 {orderItems.length === 0 ? (
                   <div className="text-sm text-muted-foreground">No items</div>

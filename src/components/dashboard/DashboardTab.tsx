@@ -26,21 +26,38 @@ export function DashboardTab({ user }: DashboardTabProps) {
   // Fetch orders from Supabase
   const { data: ordersData = [], isLoading, refetch } = useOrders(user.id);
 
+  // raw DB order row for the currently selected order (contains optional fields like customer_name/table)
+  const rawSelectedOrder = selectedOrder ? (ordersData.find((r: any) => r.id === selectedOrder.id) as any) : null;
+
   // Transform Supabase data to match our display format
-  const orders = ordersData.map((order: any) => ({
-    id: order.id,
-    orderNumber: order.order_number,
-    date: new Date(order.created_at),
-    items: order.order_items?.map((item: any) => ({
-      name: item.menu_items?.name || 'Unknown Item',
-      quantity: item.quantity,
-      price: item.price
-    })) || [],
-    subtotal: order.subtotal || 0,
-    discount: order.discount || 0,
-    total: order.total || 0,
-    status: 'completed' as const
-  }));
+  const orders = ordersData.map((order: any) => {
+    const customerName: string | null = order.customer_name ?? null;
+    // table_number may already contain combined value like 'A3' or be separate; prefer combined
+    const tableNumber: string | null = order.table_number ?? null;
+    const tableGroup: string | null = order.table_group ?? null;
+    const combinedTable = tableNumber ?? (tableGroup ? `${tableGroup}${order.table_index ?? ''}`.replace(/\s+$/,'') : null);
+    const displayLabel = customerName || combinedTable
+      ? [customerName, combinedTable].filter(Boolean).join(' — ')
+      : `Order #${order.order_number}`;
+
+    return {
+      id: order.id,
+      orderNumber: order.order_number,
+      displayLabel,
+      customerName,
+      tableNumber: combinedTable,
+      date: new Date(order.created_at),
+      items: order.order_items?.map((item: any) => ({
+        name: item.menu_items?.name || 'Unknown Item',
+        quantity: item.quantity,
+        price: item.price
+      })) || [],
+      subtotal: order.subtotal || 0,
+      discount: order.discount || 0,
+      total: order.total || 0,
+      status: 'completed' as const
+    };
+  });
 
   // Apply date filtering
   const dateFilteredOrders = orders.filter((order: any) => {
@@ -53,10 +70,17 @@ export function DashboardTab({ user }: DashboardTabProps) {
   });
 
   // Apply search filtering on top of date filtering
-  const filteredOrders = dateFilteredOrders.filter((order: any) =>
-    order.orderNumber.toString().includes(searchTerm) ||
-    order.items.some((item: any) => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredOrders = dateFilteredOrders.filter((order: any) => {
+    const term = searchTerm.toString().toLowerCase();
+    if (!term) return true;
+    // match by order number
+    if (order.orderNumber.toString().includes(term)) return true;
+    // match by display label (customer name / table)
+    if (order.displayLabel && order.displayLabel.toLowerCase().includes(term)) return true;
+    // match by items
+    if (order.items.some((item: any) => item.name.toLowerCase().includes(term))) return true;
+    return false;
+  });
 
   // Calculate stats based on date filter
   const statsOrders = dateFilter === 'all' ? orders : dateFilteredOrders;
@@ -286,7 +310,7 @@ export function DashboardTab({ user }: DashboardTabProps) {
                   >
                     <div className="flex-1">
                       <div className="flex items-center space-x-2">
-                        <p className="font-medium">Order #{order.orderNumber}</p>
+                        <p className="font-medium">{order.displayLabel}</p>
                         <Badge 
                           variant={order.status === 'completed' ? 'default' : 'secondary'}
                           className={order.status === 'completed' ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' : ''}
@@ -359,7 +383,7 @@ export function DashboardTab({ user }: DashboardTabProps) {
           <Card className="w-full max-w-md shadow-professional">
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>Order #{selectedOrder.orderNumber}</span>
+                  <span>Order #{selectedOrder.orderNumber}{rawSelectedOrder?.customer_name ? ` — ${rawSelectedOrder.customer_name}` : ''}{rawSelectedOrder?.table_number ? ` — ${rawSelectedOrder.table_number}` : ''}</span>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -402,7 +426,17 @@ export function DashboardTab({ user }: DashboardTabProps) {
                 </div>
               </div>
               <div className="flex gap-2 mt-3">
-                <Button onClick={() => { setIsEditingOrder(true); }} className="flex-1">Edit Order</Button>
+                {(() => {
+                  const twelveHours = 12 * 60 * 60 * 1000;
+                  const now = new Date();
+                  const created = selectedOrder?.date ? new Date(selectedOrder.date) : null;
+                  const canEdit = created ? (now.getTime() - created.getTime()) <= twelveHours : false;
+                  return canEdit ? (
+                    <Button onClick={() => { setIsEditingOrder(true); }} className="flex-1">Edit Order</Button>
+                  ) : (
+                    <Button disabled variant="outline" className="flex-1" size="sm">Edit (disabled)</Button>
+                  );
+                })()}
                 <Button variant="outline" onClick={() => setSelectedOrder(null)} className="flex-1">Close</Button>
               </div>
             </CardContent>

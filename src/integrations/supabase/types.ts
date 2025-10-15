@@ -100,6 +100,9 @@ export type Database = {
           discount: number | null
           id: string
           order_number: number
+          customer_name: string | null
+          table_group: string | null
+          table_number: string | null
           owner_id: string | null
           subtotal: number | null
           total: number | null
@@ -109,6 +112,9 @@ export type Database = {
           discount?: number | null
           id?: string
           order_number?: number
+          customer_name?: string | null
+          table_group?: string | null
+          table_number?: string | null
           owner_id?: string | null
           subtotal?: number | null
           total?: number | null
@@ -118,6 +124,9 @@ export type Database = {
           discount?: number | null
           id?: string
           order_number?: number
+          customer_name?: string | null
+          table_group?: string | null
+          table_number?: string | null
           owner_id?: string | null
           subtotal?: number | null
           total?: number | null

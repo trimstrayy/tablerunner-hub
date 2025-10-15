@@ -42,6 +42,9 @@ export function OrdersTab({ user }: OrdersTabProps) {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [orderItems, setOrderItems] = useState<CartItem[]>([]);
   const [discount, setDiscount] = useState(0);
+  const [customerName, setCustomerName] = useState('');
+  const [tableGroup, setTableGroup] = useState<string | null>(null);
+  const [tableNumber, setTableNumber] = useState<string | null>(null);
   const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
   const [isEditingMenu, setIsEditingMenu] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -184,6 +187,10 @@ export function OrdersTab({ user }: OrdersTabProps) {
         subtotal,
         discount: discountAmount,
         total,
+        // optional extra fields
+        customer_name: customerName || null,
+        table_group: tableGroup || null,
+        table_number: tableNumber || null,
       };
 
       const orderItemsData = orderItems.map(item => ({
@@ -202,6 +209,9 @@ export function OrdersTab({ user }: OrdersTabProps) {
       setOrderItems([]);
       setDiscount(0);
       setDiscountType('fixed');
+      setCustomerName('');
+      setTableGroup(null);
+      setTableNumber(null);
     } catch (error) {
       console.error('Error saving order:', error);
     }
@@ -511,12 +521,45 @@ export function OrdersTab({ user }: OrdersTabProps) {
       <Card className="shadow-card flex flex-col h-fit max-h-full">
         <CardHeader className="pb-3 flex-shrink-0">
           <CardTitle className="flex items-center justify-between text-lg">
-            <span>Order</span>
-            <Badge variant="outline" className="text-xs">#{nextOrderNumber}</Badge>
-          </CardTitle>
+              <span>Order</span>
+              <Badge variant="outline" className="text-xs">
+                #{nextOrderNumber}{customerName ? ` — ${customerName}` : ''}{tableNumber ? ` — ${tableNumber}` : ''}
+              </Badge>
+            </CardTitle>
         </CardHeader>
         
         <CardContent className="space-y-3 flex-1 overflow-hidden flex flex-col">
+          {/* Customer name and table selection */}
+          <div className="space-y-2">
+            <Label className="text-xs">Customer name (optional)</Label>
+            <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="e.g. John" className="text-sm" />
+
+            <div className="flex items-center space-x-2 mt-2">
+              <div className="flex-1">
+                <Label className="text-xs">Table group (optional)</Label>
+                <Select value={tableGroup ?? ''} onValueChange={(v) => { setTableGroup(v || null); setTableNumber(null); }}>
+                  <SelectTrigger className="text-sm"><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="A">A</SelectItem>
+                    <SelectItem value="B">B</SelectItem>
+                    <SelectItem value="C">C</SelectItem>
+                    <SelectItem value="D">D</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-28">
+                <Label className="text-xs">Table #</Label>
+                <Select value={tableNumber ?? ''} onValueChange={(v) => setTableNumber(v || null)}>
+                  <SelectTrigger className="text-sm"><SelectValue placeholder="-" /></SelectTrigger>
+                  <SelectContent>
+                    {(tableGroup ? Array.from({ length: 5 }, (_, i) => `${tableGroup}${i+1}`) : []).map(t => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
           {orderItems.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground">
               <p className="text-sm">No items in order</p>
