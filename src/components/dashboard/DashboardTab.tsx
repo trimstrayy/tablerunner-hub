@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Calendar, Eye, Search, TrendingUp, DollarSign, ShoppingBag, Users, RefreshCw, CalendarDays } from 'lucide-react';
 import { format, isToday, isSameDay } from 'date-fns';
+import OrderEditModal from './OrderEditModal';
 import { AuthUser } from '@/types/database';
 import { useOrders } from '@/hooks/useSupabase';
 
@@ -17,6 +18,7 @@ interface DashboardTabProps {
 export function DashboardTab({ user }: DashboardTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [isEditingOrder, setIsEditingOrder] = useState(false);
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'custom'>('all');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -399,9 +401,23 @@ export function DashboardTab({ user }: DashboardTabProps) {
                   <span>NRs {selectedOrder.total}</span>
                 </div>
               </div>
+              <div className="flex gap-2 mt-3">
+                <Button onClick={() => { setIsEditingOrder(true); }} className="flex-1">Edit Order</Button>
+                <Button variant="outline" onClick={() => setSelectedOrder(null)} className="flex-1">Close</Button>
+              </div>
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {isEditingOrder && selectedOrder && (
+        <OrderEditModal
+          open={isEditingOrder}
+          onClose={() => { setIsEditingOrder(false); setSelectedOrder(null); refetch(); }}
+          // pass raw DB row so modal has access to order_items.menu_items
+          orderRow={ordersData.find((r: any) => r.id === selectedOrder.id)}
+          ownerId={user.id}
+        />
       )}
     </div>
   );

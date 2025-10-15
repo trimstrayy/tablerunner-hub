@@ -11,7 +11,27 @@ import { useToast } from '@/hooks/use-toast';
 import { AuthUser, MenuItem, CartItem } from '@/types/database';
 import { useMenuItems, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem, useCreateOrder, useNextOrderNumber } from '@/hooks/useSupabase';
 
-const categories = ['All', 'Tea', 'Snacks', 'Ice Cream', 'Cold Drink', 'Lemon Drink', 'Bakery'];
+// Known database categories (fallback / ordering)
+const DB_CATEGORIES = [
+  'Chiya/Coffee',
+  'Snacks',
+  'Cold Drinks',
+  'Ice Cream',
+  'Bakery',
+  'Hookah',
+  'Momo'
+];
+
+// Map DB category values to display names shown in the UI
+const categoryDisplayMap: Record<string, string> = {
+  'Chiya/Coffee': 'Tea',
+  'Snacks': 'Snacks',
+  'Cold Drinks': 'Cold Drinks',
+  'Ice Cream': 'Ice Cream',
+  'Bakery': 'Bakery',
+  'Hookah': 'Hookah',
+  'Momo': 'Momo',
+};
 
 interface OrdersTabProps {
   user: AuthUser;
@@ -28,7 +48,8 @@ export function OrdersTab({ user }: OrdersTabProps) {
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    category: 'Tea',
+    // default to a valid DB category
+    category: DB_CATEGORIES[0],
     price: '',
     image_url: ''
   });
@@ -41,10 +62,18 @@ export function OrdersTab({ user }: OrdersTabProps) {
   const updateMenuItem = useUpdateMenuItem();
   const deleteMenuItem = useDeleteMenuItem();
   const createOrder = useCreateOrder();
+  // Ensure we have a typed array for TypeScript and derive categories
+  const menuItemsArray: MenuItem[] = (menuItems as MenuItem[]) || [];
+
+  const dbCategories: string[] = menuItemsArray.length > 0
+    ? Array.from(new Set(menuItemsArray.map((item: MenuItem) => item.category)))
+    : DB_CATEGORIES;
+
+  const sidebarCategories: string[] = ['All', ...dbCategories];
 
   // Keyboard shortcut for milk tea
   useEffect(() => {
-    const handleKeyPress = (event: KeyboardEvent) => {
+  const handleKeyPress = (event: KeyboardEvent) => {
       // Only trigger if not typing in an input field
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
         return;
@@ -52,7 +81,7 @@ export function OrdersTab({ user }: OrdersTabProps) {
       
       if (event.key.toLowerCase() === 't') {
         // Find the first milk tea item
-        const milkTeaItem = menuItems.find(item => 
+        const milkTeaItem = menuItemsArray.find(item => 
           item.name.toLowerCase().includes('milk tea') || 
           item.name.toLowerCase().includes('milktea')
         );
@@ -75,9 +104,9 @@ export function OrdersTab({ user }: OrdersTabProps) {
 
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
-  }, [menuItems, toast]);
+  }, [menuItemsArray, toast]);
 
-  const filteredItems = menuItems.filter(item => {
+  const filteredItems = menuItemsArray.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
     return matchesSearch && matchesCategory;
@@ -296,9 +325,9 @@ export function OrdersTab({ user }: OrdersTabProps) {
         <CardContent>
           <div className="flex gap-4">
             {/* Categories Sidebar */}
-            <div className="w-28 flex-shrink-0">
+              <div className="w-28 flex-shrink-0">
               <div className="space-y-1">
-                {categories.map(category => (
+                {sidebarCategories.map(category => (
                   <button
                     key={category}
                     onClick={() => setSelectedCategory(category)}
@@ -308,7 +337,7 @@ export function OrdersTab({ user }: OrdersTabProps) {
                         : 'hover:bg-muted text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {category}
+                    {category === 'All' ? 'All' : (categoryDisplayMap[category] ?? category)}
                   </button>
                 ))}
               </div>
@@ -372,9 +401,9 @@ export function OrdersTab({ user }: OrdersTabProps) {
                               <SelectValue placeholder="Select category" />
                             </SelectTrigger>
                             <SelectContent>
-                              {categories.filter(cat => cat !== 'All').map(category => (
+                              {dbCategories.map(category => (
                                 <SelectItem key={category} value={category} className="text-sm">
-                                  {category}
+                                  {categoryDisplayMap[category] ?? category}
                                 </SelectItem>
                               ))}
                             </SelectContent>

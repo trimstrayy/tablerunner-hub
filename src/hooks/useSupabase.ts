@@ -30,7 +30,6 @@ export const useMenuItems = (ownerId?: string) => {
     },
     enabled: !!ownerId,
     staleTime: 5 * 60 * 1000, // 5 minutes - menu items don't change frequently
-    cacheTime: 10 * 60 * 1000, // 10 minutes in cache
     refetchOnWindowFocus: false, // Don't refetch when user returns to tab
   });
 };
@@ -247,6 +246,77 @@ export const useOwners = () => {
       
       if (error) throw error;
       return data as User[];
+    },
+  });
+};
+
+export const useUpdateOrder = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({
+      orderId,
+      updates,
+      orderItems,
+    }: {
+      orderId: string;
+      updates: Partial<Order>;
+      orderItems: Omit<OrderItemInsert, 'order_id'>[];
+    }) => {
+      // Delete existing order_items for this order
+      const { error: deleteError } = await supabase
+        .from('order_items')
+        .delete()
+        .eq('order_id', orderId);
+
+      if (deleteError) throw deleteError;
+
+      // Insert new order items
+      const orderItemsWithOrderId = orderItems.map(item => ({ ...item, order_id: orderId }));
+      const { error: insertError } = await supabase
+        .from('order_items')
+        .insert(orderItemsWithOrderId);
+
+      if (insertError) throw insertError;
+
+      // Update order totals
+      const { error: orderUpdateError } = await supabase
+        .from('orders')
+        .update(updates)
+        .eq('id', orderId);
+
+      if (orderUpdateError) throw orderUpdateError;
+
+      // Return the refreshed order with nested order_items and menu_items
+      const { data: refreshedOrder, error: fetchError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            *,
+            menu_items (*)
+          )
+        `)
+        .eq('id', orderId)
+        .single();
+
+      if (fetchError) throw fetchError;
+      return refreshedOrder;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      toast({
+        title: 'Order updated',
+        description: `Order #${data.order_number} updated successfully.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error updating order',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 };
