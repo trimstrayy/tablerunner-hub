@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, Minus, Save, X, Edit3, Trash2, Settings, RefreshCw } from 'lucide-react';
+import { Search, Plus, Minus, Save, X, Edit3, Trash2, Settings, RefreshCw, Printer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AuthUser, MenuItem, CartItem } from '@/types/database';
 import { useMenuItems, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem, useCreateOrder, useNextOrderNumber } from '@/hooks/useSupabase';
@@ -57,6 +57,17 @@ export function OrdersTab({ user }: OrdersTabProps) {
     image_url: ''
   });
   const { toast } = useToast();
+
+  const handlePrint = (e: React.MouseEvent) => {
+    // prevent any bubbling that might trigger other handlers
+    e.preventDefault();
+    e.stopPropagation();
+    toast({
+      title: 'Print (placeholder)',
+      description: 'Printing is not implemented yet. This is a placeholder.',
+    });
+    // Future: call printing logic here (save then print, or formatted receipt)
+  };
 
   // Supabase hooks
   const { data: menuItems = [], isLoading: isLoadingMenu, refetch: refetchMenu } = useMenuItems(user.id);
@@ -672,33 +683,50 @@ export function OrdersTab({ user }: OrdersTabProps) {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button 
+                  <Button
+                    type="button"
                     onClick={clearAllItems}
                     variant="outline"
-                    className="flex-1 hover:bg-destructive hover:text-destructive-foreground"
+                    className="group flex-1 min-w-0 hover:bg-destructive hover:text-destructive-foreground"
                     size="sm"
                     disabled={orderItems.length === 0}
                   >
-                    <Trash2 className="w-3 h-3 mr-2" />
-                    Clear All
+                    <span className="w-5 inline-flex items-center justify-center text-muted-foreground">
+                      <Trash2 className="w-3 h-3 opacity-0 group-hover:opacity-100 text-white transition-opacity duration-150" />
+                    </span>
+                    <span>Clear</span>
                   </Button>
-                  <Button 
-                    onClick={handleSaveOrder}
-                    className="flex-1"
+
+                  {/* Print button - icon appears on hover; reserved icon space prevents shifting */}
+                  <Button
+                    type="button"
+                    onClick={handlePrint}
+                    variant="outline"
+                    className="group flex-1 min-w-0"
                     size="sm"
                     disabled={createOrder.isPending || orderItems.length === 0}
                   >
-                    {createOrder.isPending ? (
-                      <>
-                        <RefreshCw className="w-3 h-3 mr-2 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-3 h-3 mr-2" />
-                        Save Order
-                      </>
-                    )}
+                    <span className="w-5 inline-flex items-center justify-center text-muted-foreground">
+                      <Printer className="w-3 h-3 opacity-0 group-hover:opacity-100 text-white transition-opacity duration-150" />
+                    </span>
+                    <span>Print</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    onClick={handleSaveOrder}
+                    className="group flex-1 min-w-0"
+                    size="sm"
+                    disabled={createOrder.isPending || orderItems.length === 0}
+                  >
+                    <span className="w-5 inline-flex items-center justify-center text-muted-foreground">
+                      {createOrder.isPending ? (
+                        <RefreshCw className="w-3 h-3 mr-0 animate-spin" />
+                      ) : (
+                        <Save className="w-3 h-3 opacity-0 group-hover:opacity-100 text-white transition-opacity duration-150" />
+                      )}
+                    </span>
+                    <span>{createOrder.isPending ? 'Saving' : 'Save'}</span>
                   </Button>
                 </div>
               </div>
