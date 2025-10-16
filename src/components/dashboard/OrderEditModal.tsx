@@ -77,6 +77,16 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
   const handleSave = async () => {
     if (!orderRow) return;
 
+    // If the order has been marked closed (another order was created for the same table), prevent saving
+    if (orderRow.closed) {
+      toast({
+        title: 'Order closed',
+        description: 'This order has been closed because a new order was created for the same table. It cannot be edited.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     // Prevent editing orders older than 12 hours
     const createdAt = orderRow.created_at ? new Date(orderRow.created_at) : null;
     if (createdAt) {
@@ -92,7 +102,8 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
     }
 
     const orderItemsPayload = orderItems.map(it => ({
-      item_id: it.id,
+      item_id: it.id && it.id.toString().startsWith('oneoff-') ? null : it.id,
+      name: it.id && it.id.toString().startsWith('oneoff-') ? it.name : undefined,
       quantity: it.quantity,
       price: it.unitPrice,
       total: it.total,

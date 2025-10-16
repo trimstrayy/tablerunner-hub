@@ -55,7 +55,8 @@ export function DashboardTab({ user }: DashboardTabProps) {
       subtotal: order.subtotal || 0,
       discount: order.discount || 0,
       total: order.total || 0,
-      status: 'completed' as const
+      status: order.closed ? 'closed' as const : 'completed' as const,
+      closed: !!order.closed
     };
   });
 
@@ -430,7 +431,9 @@ export function DashboardTab({ user }: DashboardTabProps) {
                   const twelveHours = 12 * 60 * 60 * 1000;
                   const now = new Date();
                   const created = selectedOrder?.date ? new Date(selectedOrder.date) : null;
-                  const canEdit = created ? (now.getTime() - created.getTime()) <= twelveHours : false;
+                  const withinWindow = created ? (now.getTime() - created.getTime()) <= twelveHours : false;
+                  const isClosed = rawSelectedOrder?.closed === true || selectedOrder?.closed === true;
+                  const canEdit = withinWindow && !isClosed;
                   return canEdit ? (
                     <Button onClick={() => { setIsEditingOrder(true); }} className="flex-1">Edit Order</Button>
                   ) : (

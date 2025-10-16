@@ -23,7 +23,8 @@ export const useMenuItems = (ownerId?: string) => {
         query = query.eq('owner_id', ownerId);
       }
       
-      const { data, error } = await query.order('created_at', { ascending: false });
+  // Return menu items ordered alphabetically by name (A → Z)
+  const { data, error } = await query.order('name', { ascending: true });
       
       if (error) throw error;
       return data as MenuItem[];
@@ -193,11 +194,32 @@ export const useCreateOrder = () => {
       order: any; 
       orderItems: Omit<OrderItemInsert, 'order_id'>[] 
     }) => {
-      // Create the order first
+      // Before creating the new order, try to close any existing open orders
+      // for the same owner and table_number so the previous guest's order becomes uneditable.
+      try {
+        if (order?.owner_id && order?.table_number) {
+          // Attempt to mark previous orders closed. If the 'closed' column doesn't exist yet
+          // this may return an error; we catch and log it but do not fail the whole operation.
+          const { error: closeError } = await supabase
+            .from('orders')
+            .update({ closed: true } as any)
+            .eq('owner_id', order.owner_id)
+            .eq('table_number', order.table_number);
+          if (closeError) {
+            // Non-fatal: log and continue; DB may not have the column yet.
+            console.warn('Could not mark previous orders closed:', closeError.message || closeError);
+          }
+        }
+      } catch (e) {
+        console.warn('Error while attempting to close previous orders:', e);
+      }
+
+      // Create the order (explicitly set closed=false for the new order if supported)
       // Cast to any to allow inserting optional fields that may not be present in generated types
+      const orderToInsert = { ...order, closed: false };
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
-        .insert(order as any)
+        .insert(orderToInsert as any)
         .select()
         .single();
       

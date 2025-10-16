@@ -45,6 +45,9 @@ export function OrdersTab({ user }: OrdersTabProps) {
   const [customerName, setCustomerName] = useState('');
   const [tableGroup, setTableGroup] = useState<string | null>(null);
   const [tableNumber, setTableNumber] = useState<string | null>(null);
+  // One-off item inputs (name + price) that do not modify the menu
+  const [oneOffName, setOneOffName] = useState('');
+  const [oneOffPrice, setOneOffPrice] = useState('');
   const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
   const [isEditingMenu, setIsEditingMenu] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -147,6 +150,32 @@ export function OrdersTab({ user }: OrdersTabProps) {
     });
   };
 
+  // Add a one-off item (name + price) to the current order without touching the menu
+  const addOneOffItem = () => {
+    const price = parseFloat(oneOffPrice);
+    if (!oneOffName || isNaN(price) || price <= 0) {
+      toast({
+        title: 'Invalid one-off item',
+        description: 'Please enter a name and valid price for the one-off item.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const id = `oneoff-${Date.now()}`;
+    const item = {
+      id,
+      name: oneOffName,
+      quantity: 1,
+      unitPrice: price,
+      total: price,
+    } as CartItem;
+
+    setOrderItems(prev => [...prev, item]);
+    setOneOffName('');
+    setOneOffPrice('');
+  };
+
   const updateQuantity = (id: string, change: number) => {
     setOrderItems(prev =>
       prev.map(item => {
@@ -205,7 +234,10 @@ export function OrdersTab({ user }: OrdersTabProps) {
       };
 
       const orderItemsData = orderItems.map(item => ({
-        item_id: item.id,
+        // If this is a one-off item (generated id starts with 'oneoff-'), set item_id null
+        // and include the name so the DB can store custom item names.
+        item_id: item.id && item.id.toString().startsWith('oneoff-') ? null : item.id,
+        name: item.id && item.id.toString().startsWith('oneoff-') ? item.name : undefined,
         quantity: item.quantity,
         price: item.unitPrice,
         total: item.total,
@@ -568,6 +600,29 @@ export function OrdersTab({ user }: OrdersTabProps) {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+            {/* One-off item input: name + price (does not change menu) */}
+            <div className="mt-3">
+              <Label className="text-xs">One-off item</Label>
+              <div className="flex items-center gap-2 mt-2">
+                <Input
+                  placeholder="Item name"
+                  value={oneOffName}
+                  onChange={(e) => setOneOffName(e.target.value)}
+                  className="text-sm"
+                />
+                <Input
+                  placeholder="0.00"
+                  value={oneOffPrice}
+                  onChange={(e) => setOneOffPrice(e.target.value)}
+                  type="number"
+                  step="0.01"
+                  className="w-28 text-sm"
+                />
+                <Button size="sm" onClick={addOneOffItem}>
+                  Add
+                </Button>
               </div>
             </div>
           </div>
