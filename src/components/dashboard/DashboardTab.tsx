@@ -105,6 +105,126 @@ export function DashboardTab({ user }: DashboardTabProps) {
 
   const [salesOpen, setSalesOpen] = useState(false);
 
+  const COMPANY_INFO = {
+    name: 'ठुल्दाई को चिया चौतारी  ',
+    address: '28 Kilo, Dhulikhel',
+    phone: '9768768326',
+    pan: '100717802'
+  };
+
+  const printInIframe = (html: string) => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.overflow = 'hidden';
+    iframe.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(iframe);
+
+    const win = iframe.contentWindow;
+    const doc = win?.document;
+    if (!doc || !win) {
+      try { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); } catch (e) {}
+      return;
+    }
+
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    const cleanup = () => {
+      try { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); } catch (e) {}
+      try { win.removeEventListener('afterprint', cleanup); } catch (e) {}
+      try { window.removeEventListener('focus', cleanup); } catch (e) {}
+    };
+
+    const doPrint = () => {
+      try { win.focus(); win.print(); } catch (err) { try { window.print(); } catch (e) {} }
+    };
+
+    const onLoaded = () => { setTimeout(doPrint, 200); };
+    iframe.addEventListener('load', onLoaded, { once: true });
+    try { win.addEventListener('afterprint', cleanup, { once: true }); } catch (e) {}
+    window.addEventListener('focus', cleanup, { once: true });
+    setTimeout(() => {
+      try { const ready = doc.readyState === 'complete' || doc.readyState === 'interactive'; if (ready) onLoaded(); } catch (e) { onLoaded(); }
+    }, 500);
+  };
+
+  const handlePrintOrder = (order: any) => {
+    if (!order) return;
+    const receiptHTML = `
+    <html>
+      <head>
+        <title>Receipt #${order.orderNumber}</title>
+        <style>
+          @page { size: 78mm auto; margin: 8mm 5mm 6mm 5mm; }
+          body { font-family: 'Courier New', monospace; margin:0; padding:0; background:white; color:#000; }
+          .receipt { width:68mm; max-width:68mm; margin:0 auto; padding:2mm 0 2mm 0; box-sizing:border-box; }
+          .receipt-header { text-align:center; border-bottom:1px dashed #000; padding-bottom:6px; margin-bottom:6px; }
+          .receipt-header h1{ margin:1px 0; font-size:12px; line-height:1 }
+          .receipt-header p{ margin:0; font-size:8px }
+          .order-details{ text-align:center; border-bottom:1px dashed #000; padding-bottom:4px; margin-bottom:4px; font-size:9px }
+          .items-header{ display:flex; justify-content:space-between; font-weight:bold; font-size:8px; border-bottom:1px solid #000; padding-bottom:2px; margin-bottom:3px }
+          .item-row{ display:flex; justify-content:space-between; font-size:8px; margin-bottom:1px; padding-bottom:1px; border-bottom:1px dotted #eee }
+          .item-name{ flex:1 }
+          .item-qty{ width:8mm; text-align:center }
+          .item-price{ width:16mm; text-align:right }
+          .item-total{ width:22mm; text-align:right }
+          .totals{ border-top:1px dashed #000; border-bottom:1px dashed #000; padding:4px 0; margin:4px 0; font-size:9px }
+          .total-row{ display:flex; justify-content:space-between; margin-bottom:2px }
+          .total-row.final{ font-weight:bold; font-size:11px }
+          .footer{ text-align:center; margin-top:4px; font-size:8px }
+          @media print { @page { size:78mm auto; margin:8mm 5mm 6mm 5mm } html,body{ width:78mm; margin:0; padding:0 } .receipt{ width:68mm; padding:2mm 0 2mm 0 } }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <div class="receipt-header">
+            <h1>${COMPANY_INFO.name}</h1>
+            <p>${COMPANY_INFO.address}</p>
+            <p>${COMPANY_INFO.phone}</p>
+            <p>PAN: ${COMPANY_INFO.pan}</p>
+          </div>
+          <div class="order-details">
+            <p><strong>Order #${order.orderNumber}</strong></p>
+            <p>Date: ${new Date(order.date).toLocaleDateString()}</p>
+            <p>Time: ${new Date(order.date).toLocaleTimeString()}</p>
+            ${order.customerName ? `<p>Customer: ${order.customerName}</p>` : ''}
+            ${order.tableNumber ? `<p>Table: ${order.tableNumber}</p>` : ''}
+            ${order.paymentMethod ? `<p>Payment: ${order.paymentMethod === 'cash' ? 'Cash' : 'Online'}</p>` : ''}
+          </div>
+          <div class="items-header">
+            <div class="item-name">Item</div>
+            <div class="item-qty">Qty</div>
+            <div class="item-price">Price</div>
+            <div class="item-total">Total</div>
+          </div>
+          ${order.items.map((item: any) => `
+            <div class="item-row">
+              <div class="item-name">${item.name}</div>
+              <div class="item-qty">${item.quantity}</div>
+              <div class="item-price">NRs ${item.price}</div>
+              <div class="item-total">NRs ${item.quantity * item.price}</div>
+            </div>
+          `).join('')}
+          <div class="totals">
+            <div class="total-row"><span>Subtotal:</span><span>NRs ${order.subtotal}</span></div>
+            ${order.discount && order.discount > 0 ? `<div class="total-row"><span>Discount:</span><span>-NRs ${order.discount}</span></div>` : ''}
+            <div class="total-row final"><span>TOTAL:</span><span>NRs ${order.total}</span></div>
+          </div>
+          <div class="footer"><p> म अनि मेरो चिया!</p></div>
+        </div>
+      </body>
+    </html>
+    `;
+
+    printInIframe(receiptHTML);
+  };
+
   // Calculate item sales summary
   const itemSales = orders.reduce((acc: Record<string, number>, order: any) => {
     order.items.forEach((item: any) => {
@@ -139,7 +259,7 @@ export function DashboardTab({ user }: DashboardTabProps) {
                 <p className="text-2xl font-bold text-primary">NRs {totalSales}</p>
 
                 {salesOpen && (
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-3 space-y-2">  
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
                         <Badge variant="outline">Cash</Badge>
@@ -476,6 +596,7 @@ export function DashboardTab({ user }: DashboardTabProps) {
                     <Button disabled variant="outline" className="flex-1" size="sm">Edit (disabled)</Button>
                   );
                 })()}
+                <Button variant="outline" onClick={() => handlePrintOrder(selectedOrder)} className="flex-1">Print</Button>
                 <Button variant="outline" onClick={() => setSelectedOrder(null)} className="flex-1">Close</Button>
               </div>
             </CardContent>
