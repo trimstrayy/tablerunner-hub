@@ -66,7 +66,7 @@ export function OrdersTab({ user }: OrdersTabProps) {
         window.print();
         }
         const COMPANY_INFO = {
-          name: 'ठुल्दाई को चिया चौतारी  ',
+          name: 'ठुल्दाईको चिया चौतारी  ',
           address: '28 Kilo, Dhulikhel',
           phone: '9768768326',
           pan: '100717802'
@@ -243,14 +243,84 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
     </html>
   `;
 
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    toast({ title: 'Popup blocked', description: 'Please allow pop-ups for this site to print.', variant: 'destructive' });
-    return;
-  }
-  printWindow.document.write(receiptHTML);
-  printWindow.document.close();
-  setTimeout(() => printWindow.print(), 250);
+  // Print using a hidden iframe appended to the current document.
+  // This avoids opening a new tab/window and generally bypasses popup blockers.
+  const printInIframe = (html: string) => {
+    const iframe = document.createElement('iframe');
+    // Keep iframe hidden and non-intrusive
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.overflow = 'hidden';
+    iframe.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(iframe);
+
+    const win = iframe.contentWindow;
+    const doc = win?.document;
+    if (!doc || !win) {
+      try { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); } catch (e) {}
+      toast({ title: 'Cannot print', description: 'Failed to create print frame.', variant: 'destructive' });
+      return;
+    }
+
+    // Write the full HTML into the iframe
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    const cleanup = () => {
+      try {
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      } catch (e) {
+        // noop
+      }
+      try { win.removeEventListener('afterprint', cleanup); } catch (e) {}
+      try { window.removeEventListener('focus', cleanup); } catch (e) {}
+    };
+
+    const doPrint = () => {
+      try {
+        win.focus();
+        win.print();
+      } catch (err) {
+        // fallback to main window print if iframe print fails
+        try { window.print(); } catch (e) {}
+      }
+    };
+
+    // Some browsers may fire load after writing, others may not. Use both load listener and timeouts.
+    const onLoaded = () => {
+      // Give the iframe a brief moment to apply styles/fonts before printing
+      setTimeout(doPrint, 200);
+    };
+
+    iframe.addEventListener('load', onLoaded, { once: true });
+
+    // Try to use afterprint on the iframe window to cleanup
+    try {
+      win.addEventListener('afterprint', cleanup, { once: true });
+    } catch (e) {
+      // ignore
+    }
+
+    // Fallback cleanup: when main window regains focus (user closed print dialog)
+    window.addEventListener('focus', cleanup, { once: true });
+
+    // In case load didn't fire for dynamic documents, trigger print after a short fallback timeout
+    setTimeout(() => {
+      try {
+        const ready = doc.readyState === 'complete' || doc.readyState === 'interactive';
+        if (ready) onLoaded();
+      } catch (e) {
+        onLoaded();
+      }
+    }, 500);
+  };
+
+  printInIframe(receiptHTML);
 };
 
 const handlePrint = async (e: React.MouseEvent) => {
