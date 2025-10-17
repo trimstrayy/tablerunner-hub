@@ -56,7 +56,9 @@ export function DashboardTab({ user }: DashboardTabProps) {
       discount: order.discount || 0,
       total: order.total || 0,
       status: order.closed ? 'closed' as const : 'completed' as const,
-      closed: !!order.closed
+      closed: !!order.closed,
+      // Payment method may be stored as payment_method or paymentMethod in returned row
+      paymentMethod: (order.payment_method ?? order.paymentMethod ?? 'cash') as 'cash' | 'online' | string,
     };
   });
 
@@ -91,6 +93,18 @@ export function DashboardTab({ user }: DashboardTabProps) {
     order.date.toDateString() === new Date().toDateString()
   ).length;
 
+  // Breakdown by payment method
+  const cashSales = statsOrders.reduce((sum: number, order: any) => {
+    const pm = (order.paymentMethod ?? order.payment_method ?? 'cash');
+    return sum + ((pm === 'cash' || pm === 'CASH') ? (order.total || 0) : 0);
+  }, 0);
+  const onlineSales = statsOrders.reduce((sum: number, order: any) => {
+    const pm = (order.paymentMethod ?? order.payment_method ?? 'cash');
+    return sum + ((pm === 'online' || pm === 'ONLINE') ? (order.total || 0) : 0);
+  }, 0);
+
+  const [salesOpen, setSalesOpen] = useState(false);
+
   // Calculate item sales summary
   const itemSales = orders.reduce((acc: Record<string, number>, order: any) => {
     order.items.forEach((item: any) => {
@@ -107,19 +121,41 @@ export function DashboardTab({ user }: DashboardTabProps) {
     <div className="space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="shadow-card">
+        <Card className="shadow-card cursor-pointer" onClick={() => setSalesOpen(prev => !prev)} role="button" aria-pressed={salesOpen}>
           <CardContent className="p-6">
             <div className="flex items-center space-x-2">
               <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
                 <DollarSign className="w-5 h-5 text-primary" />
               </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  {dateFilter === 'today' ? "Today's Sales" : 
-                   dateFilter === 'custom' && selectedDate ? `Sales on ${format(selectedDate, 'MMM dd')}` : 
-                   'Total Sales'}
-                </p>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    {dateFilter === 'today' ? "Today's Sales" : 
+                     dateFilter === 'custom' && selectedDate ? `Sales on ${format(selectedDate, 'MMM dd')}` : 
+                     'Total Sales'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{salesOpen ? '-' : '+'}</p>
+                </div>
                 <p className="text-2xl font-bold text-primary">NRs {totalSales}</p>
+
+                {salesOpen && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="outline">Cash</Badge>
+                        <span className="text-sm text-muted-foreground"></span>
+                      </div>
+                      <div className="font-medium">NRs {cashSales}</div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="secondary">Online</Badge>
+                        <span className="text-sm text-muted-foreground"></span>
+                      </div>
+                      <div className="font-medium">NRs {onlineSales}</div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>

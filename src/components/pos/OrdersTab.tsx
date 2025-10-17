@@ -78,18 +78,25 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
     <html>
       <head>
         <title>Receipt #${receiptNumberToShow}</title>
-        <style>
-          @page { size: 3in auto; margin: 4mm; }
+          <style>
+          /* Target 78mm thermal receipts: larger top margin to avoid header clipping */
+          /* margin: top right bottom left */
+          @page { size: 78mm auto; margin: 8mm 5mm 6mm 5mm; }
           body {
             font-family: 'Courier New', monospace;
             margin: 0;
-            padding: 8px;
-            background: white;
-          }
-          .receipt {
-            width: 3in;
-            margin: 0 auto;
             padding: 0;
+            background: white;
+            color: #000;
+            -webkit-print-color-adjust: exact;
+          }
+          /* Printable content width = 78mm - 5mm(left) - 5mm(right) = 68mm */
+          .receipt {
+            width: 68mm;
+            max-width: 68mm;
+            margin: 0 auto;
+            /* internal padding to keep content away from edges (top particularly) */
+            padding: 2mm 0 2mm 0;
             box-sizing: border-box;
           }
           .receipt-header {
@@ -99,19 +106,21 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
             margin-bottom: 10px;
           }
           .receipt-header h1 {
-            margin: 5px 0;
-            font-size: 16px;
+            margin: 1px 0;
+            font-size: 12px;
+            line-height: 1;
           }
           .receipt-header p {
-            margin: 2px 0;
-            font-size: 11px;
+            margin: 0px 0;
+            font-size: 8px;
+            line-height: 1;
           }
           .order-details {
             text-align: center;
             border-bottom: 1px dashed #000;
-            padding-bottom: 8px;
-            margin-bottom: 8px;
-            font-size: 12px;
+            padding-bottom: 4px;
+            margin-bottom: 4px;
+            font-size: 9px;
           }
           .order-details p {
             margin: 3px 0;
@@ -120,62 +129,64 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
             display: flex;
             justify-content: space-between;
             font-weight: bold;
-            font-size: 11px;
+            font-size: 8px;
             border-bottom: 1px solid #000;
-            padding-bottom: 5px;
-            margin-bottom: 5px;
+            padding-bottom: 2px;
+            margin-bottom: 3px;
           }
           .item-row {
             display: flex;
             justify-content: space-between;
-            font-size: 11px;
-            margin-bottom: 3px;
-            padding-bottom: 3px;
+            font-size: 8px;
+            margin-bottom: 1px;
+            padding-bottom: 1px;
             border-bottom: 1px dotted #eee;
           }
           .item-name {
             flex: 1;
           }
+          /* Use mm units so widths align to the printable area; remaining space used by item name */
           .item-qty {
-            width: 30px;
+            width: 8mm;
             text-align: center;
           }
           .item-price {
-            width: 50px;
+            width: 16mm;
             text-align: right;
           }
           .item-total {
-            width: 60px;
+            width: 22mm;
             text-align: right;
           }
           .totals {
             border-top: 1px dashed #000;
             border-bottom: 1px dashed #000;
-            padding: 8px 0;
-            margin: 8px 0;
-            font-size: 12px;
+            padding: 4px 0;
+            margin: 4px 0;
+            font-size: 9px;
           }
           .total-row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 5px;
+            margin-bottom: 2px;
           }
           .total-row.final {
             font-weight: bold;
-            font-size: 14px;
+            font-size: 11px;
           }
           .discount-row {
             color: #d32f2f;
           }
           .footer {
             text-align: center;
-            margin-top: 10px;
-            font-size: 11px;
+            margin-top: 4px;
+            font-size: 8px;
           }
           @media print {
-            @page { size: 3in auto; margin: 4mm; }
-            html, body { width: 3in; margin: 0; padding: 0; }
-            .receipt { width: 3in; margin: 0; padding: 0; }
+            /* Ensure print-time page settings align with the mm-based layout */
+            @page { size: 78mm auto; margin: 8mm 5mm 6mm 5mm; }
+            html, body { width: 78mm; margin: 0; padding: 0; }
+            .receipt { width: 68mm; margin: 0; padding: 2mm 0 2mm 0; }
             body { -webkit-print-color-adjust: exact; }
           }
         </style>
@@ -886,12 +897,14 @@ const handlePrint = async (e: React.MouseEvent) => {
                 <Label className="text-xs">Table group (optional)</Label>
                 <Select value={tableGroup ?? ''} onValueChange={(v) => { setTableGroup(v || null); setTableNumber(null); }}>
                   <SelectTrigger className="text-sm"><SelectValue placeholder="None" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="A">A</SelectItem>
-                    <SelectItem value="B">B</SelectItem>
-                    <SelectItem value="C">C</SelectItem>
-                    <SelectItem value="D">D</SelectItem>
-                  </SelectContent>
+                    <SelectContent>
+                      <SelectItem value="A">A</SelectItem>
+                      <SelectItem value="B">B</SelectItem>
+                      <SelectItem value="C">C</SelectItem>
+                      <SelectItem value="D">D</SelectItem>
+                      <SelectItem value="T">T</SelectItem>
+                      <SelectItem value="G">G</SelectItem>
+                    </SelectContent>
                 </Select>
               </div>
               <div className="w-28">
@@ -899,9 +912,23 @@ const handlePrint = async (e: React.MouseEvent) => {
                 <Select value={tableNumber ?? ''} onValueChange={(v) => setTableNumber(v || null)}>
                   <SelectTrigger className="text-sm"><SelectValue placeholder="-" /></SelectTrigger>
                   <SelectContent>
-                    {(tableGroup ? Array.from({ length: 5 }, (_, i) => `${tableGroup}${i+1}`) : []).map(t => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
+                    {(() => {
+                      if (!tableGroup) return null;
+                      if (tableGroup === 'T') return ['T0', 'T1', 'T2', 'T3'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>);
+                      if (tableGroup === 'G') return ['G0', 'G1', 'G2'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>);
+                      // For A, B, C -> tables 1..8
+                      if (['A', 'B', 'C'].includes(tableGroup)) return Array.from({ length: 8 }, (_, i) => `${tableGroup}${i+1}`).map(t => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ));
+                      // For D -> tables 1..2
+                      if (tableGroup === 'D') return Array.from({ length: 2 }, (_, i) => `${tableGroup}${i+1}`).map(t => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ));
+                      // Fallback: keep previous behavior (5 tables)
+                      return Array.from({ length: 5 }, (_, i) => `${tableGroup}${i+1}`).map(t => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ));
+                    })()}
                   </SelectContent>
                 </Select>
               </div>
