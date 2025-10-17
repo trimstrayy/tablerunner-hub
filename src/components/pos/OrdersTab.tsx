@@ -48,6 +48,7 @@ export function OrdersTab({ user }: OrdersTabProps) {
   // One-off item inputs (name + price) that do not modify the menu
   const [oneOffName, setOneOffName] = useState('');
   const [oneOffPrice, setOneOffPrice] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
   const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
   const [isEditingMenu, setIsEditingMenu] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -59,18 +60,250 @@ export function OrdersTab({ user }: OrdersTabProps) {
     price: '',
     image_url: ''
   });
-  const { toast } = useToast();
+    const { toast } = useToast();
 
-  const handlePrint = (e: React.MouseEvent) => {
-    // prevent any bubbling that might trigger other handlers
-    e.preventDefault();
-    e.stopPropagation();
+   function printPage() {
+        window.print();
+        }
+        const COMPANY_INFO = {
+          name: 'ठुल्दाई को चिया चौतारी  ',
+          address: '28 Kilo, Dhulikhel',
+          phone: '9768768326',
+          pan: '100717802'
+        };
+
+const generateReceipt = (printedOrderNumber?: number | string) => {
+  const receiptNumberToShow = printedOrderNumber ?? nextOrderNumber;
+  const receiptHTML = `
+    <html>
+      <head>
+        <title>Receipt #${receiptNumberToShow}</title>
+        <style>
+          @page { size: 3in auto; margin: 4mm; }
+          body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 8px;
+            background: white;
+          }
+          .receipt {
+            width: 3in;
+            margin: 0 auto;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          .receipt-header {
+            text-align: center;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+          }
+          .receipt-header h1 {
+            margin: 5px 0;
+            font-size: 16px;
+          }
+          .receipt-header p {
+            margin: 2px 0;
+            font-size: 11px;
+          }
+          .order-details {
+            text-align: center;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+            font-size: 12px;
+          }
+          .order-details p {
+            margin: 3px 0;
+          }
+          .items-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 11px;
+            border-bottom: 1px solid #000;
+            padding-bottom: 5px;
+            margin-bottom: 5px;
+          }
+          .item-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            margin-bottom: 3px;
+            padding-bottom: 3px;
+            border-bottom: 1px dotted #eee;
+          }
+          .item-name {
+            flex: 1;
+          }
+          .item-qty {
+            width: 30px;
+            text-align: center;
+          }
+          .item-price {
+            width: 50px;
+            text-align: right;
+          }
+          .item-total {
+            width: 60px;
+            text-align: right;
+          }
+          .totals {
+            border-top: 1px dashed #000;
+            border-bottom: 1px dashed #000;
+            padding: 8px 0;
+            margin: 8px 0;
+            font-size: 12px;
+          }
+          .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+          }
+          .total-row.final {
+            font-weight: bold;
+            font-size: 14px;
+          }
+          .discount-row {
+            color: #d32f2f;
+          }
+          .footer {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 11px;
+          }
+          @media print {
+            @page { size: 3in auto; margin: 4mm; }
+            html, body { width: 3in; margin: 0; padding: 0; }
+            .receipt { width: 3in; margin: 0; padding: 0; }
+            body { -webkit-print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <!-- Header -->
+          <div class="receipt-header">
+            <h1>${COMPANY_INFO.name}</h1>
+            <p>${COMPANY_INFO.address}</p>
+            <p>${COMPANY_INFO.phone}</p>
+            <p>PAN: ${COMPANY_INFO.pan}</p>
+          </div>
+
+          <!-- Order Info -->
+          <div class="order-details">
+            <p><strong>Order #${nextOrderNumber}</strong></p>
+            <p>Date: ${new Date().toLocaleDateString()}</p>
+            <p>Time: ${new Date().toLocaleTimeString()}</p>
+            ${customerName ? `<p>Customer: ${customerName}</p>` : ''}
+            ${tableNumber ? `<p>Table: ${tableNumber}</p>` : ''}
+            ${paymentMethod ? `<p>Payment: ${paymentMethod === 'cash' ? 'Cash' : 'Online'}</p>` : ''}
+          </div>
+
+          <!-- Items -->
+          <div class="items-header">
+            <div class="item-name">Item</div>
+            <div class="item-qty">Qty</div>
+            <div class="item-price">Price</div>
+            <div class="item-total">Total</div>
+          </div>
+          
+          ${orderItems.map(item => `
+            <div class="item-row">
+              <div class="item-name">${item.name}</div>
+              <div class="item-qty">${item.quantity}</div>
+              <div class="item-price">NRs ${item.unitPrice}</div>
+              <div class="item-total">NRs ${item.total}</div>
+            </div>
+          `).join('')}
+
+          <!-- Totals -->
+          <div class="totals">
+            <div class="total-row">
+              <span>Subtotal:</span>
+              <span>NRs ${subtotal}</span>
+            </div>
+            ${discount > 0 ? `
+              <div class="total-row discount-row">
+                <span>Discount (${discountType === 'percentage' ? discount + '%' : 'Rs'}):</span>
+                <span>-NRs ${discountAmount.toFixed(0)}</span>
+              </div>
+            ` : ''}
+            <div class="total-row final">
+              <span>TOTAL:</span>
+              <span>NRs ${total}</span>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p> म अनि मेरो चिया!</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    toast({ title: 'Popup blocked', description: 'Please allow pop-ups for this site to print.', variant: 'destructive' });
+    return;
+  }
+  printWindow.document.write(receiptHTML);
+  printWindow.document.close();
+  setTimeout(() => printWindow.print(), 250);
+};
+
+const handlePrint = async (e: React.MouseEvent) => {
+  e.preventDefault();
+  if (orderItems.length === 0) {
     toast({
-      title: 'Print (placeholder)',
-      description: 'Printing is not implemented yet. This is a placeholder.',
+      title: 'Cannot print',
+      description: 'Add items to order first.',
+      variant: 'destructive',
     });
-    // Future: call printing logic here (save then print, or formatted receipt)
-  };
+    return;
+  }
+
+  try {
+    // build payload for save (same structure as handleSaveOrder)
+    const orderData = {
+      order_number: nextOrderNumber,
+      owner_id: user.id,
+      subtotal,
+      discount: discountType === 'percentage' ? (subtotal * discount / 100) : discount,
+      total,
+      customer_name: customerName || null,
+      table_group: tableGroup || null,
+      table_number: tableNumber || null,
+    } as any;
+
+    const orderItemsData = orderItems.map(item => ({
+      item_id: item.id && item.id.toString().startsWith('oneoff-') ? null : item.id,
+      name: item.id && item.id.toString().startsWith('oneoff-') ? item.name : undefined,
+      quantity: item.quantity,
+      price: item.unitPrice,
+      total: item.total,
+    }));
+
+    // save order first
+    const saved = await createOrder.mutateAsync({ order: orderData, orderItems: orderItemsData });
+
+    // once saved, open receipt with server-assigned order number
+    generateReceipt(saved?.order_number ?? nextOrderNumber);
+
+    // Clear the order as save was successful
+    setOrderItems([]);
+    setDiscount(0);
+    setDiscountType('fixed');
+    setCustomerName('');
+    setTableGroup(null);
+    setTableNumber(null);
+  } catch (err) {
+    console.error('Error saving or printing order:', err);
+    toast({ title: 'Error', description: 'Could not save or print the order.', variant: 'destructive' });
+  }
+};
+
 
   // Supabase hooks
   const { data: menuItems = [], isLoading: isLoadingMenu, refetch: refetchMenu } = useMenuItems(user.id);
@@ -231,6 +464,7 @@ export function OrdersTab({ user }: OrdersTabProps) {
         customer_name: customerName || null,
         table_group: tableGroup || null,
         table_number: tableNumber || null,
+        payment_method: paymentMethod,
       };
 
       const orderItemsData = orderItems.map(item => ({
@@ -737,7 +971,28 @@ export function OrdersTab({ user }: OrdersTabProps) {
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Payment</Label>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('cash')}
+                        className={`px-3 py-1 rounded-lg border transition-colors text-sm ${paymentMethod === 'cash' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-200 text-gray-700 border-gray-200'}`}
+                      >
+                        Cash
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('online')}
+                        className={`px-3 py-1 rounded-lg border transition-colors text-sm ${paymentMethod === 'online' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-200 text-gray-700 border-gray-200'}`}
+                      >
+                        Online
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                  <div className="flex gap-2">
                   <Button
                     type="button"
                     onClick={clearAllItems}
@@ -752,7 +1007,8 @@ export function OrdersTab({ user }: OrdersTabProps) {
                     <span>Clear</span>
                   </Button>
 
-                  {/* Print button - icon appears on hover; reserved icon space prevents shifting */}
+                  {/* Print button - icon a
+                  ppears on hover; reserved icon space prevents shifting */}
                   <Button
                     type="button"
                     onClick={handlePrint}

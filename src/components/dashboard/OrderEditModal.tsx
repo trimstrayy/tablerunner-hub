@@ -31,6 +31,7 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
   const [customerName, setCustomerName] = useState<string | null>(null);
   const [tableGroup, setTableGroup] = useState<string | null>(null);
   const [tableNumber, setTableNumber] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | null>(null);
   const { data: menuItemsData = [], isLoading: isLoadingMenu } = useMenuItems(ownerId);
   const menuItems: MenuItem[] = (menuItemsData as MenuItem[]) || [];
   const updateOrder = useUpdateOrder();
@@ -50,6 +51,7 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
     setCustomerName(orderRow.customer_name || null);
     setTableNumber(orderRow.table_number || null);
     setTableGroup(orderRow.table_group || null);
+    setPaymentMethod(orderRow.payment_method || null);
   }, [orderRow]);
 
   const addToOrder = (menuItem: MenuItem) => {
@@ -116,6 +118,7 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
       customer_name: customerName || null,
       table_group: tableGroup || null,
       table_number: tableNumber || null,
+      payment_method: paymentMethod || null,
     };
 
     try {
@@ -184,6 +187,17 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <Label className="text-xs">Payment method</Label>
+                  <div className="flex items-center space-x-3 mt-1">
+                    <label className="text-sm">
+                      <input type="radio" name="edit-payment" value="cash" checked={paymentMethod === 'cash'} onChange={() => setPaymentMethod('cash')} /> Cash
+                    </label>
+                    <label className="text-sm">
+                      <input type="radio" name="edit-payment" value="online" checked={paymentMethod === 'online'} onChange={() => setPaymentMethod('online')} /> Online
+                    </label>
                   </div>
                 </div>
               </div>
