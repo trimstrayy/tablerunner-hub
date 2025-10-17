@@ -31,6 +31,9 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
   const [customerName, setCustomerName] = useState<string | null>(null);
   const [tableGroup, setTableGroup] = useState<string | null>(null);
   const [tableNumber, setTableNumber] = useState<string | null>(null);
+  // One-off item inputs for editing existing orders
+  const [oneOffName, setOneOffName] = useState('');
+  const [oneOffPrice, setOneOffPrice] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | null>(null);
   const { data: menuItemsData = [], isLoading: isLoadingMenu } = useMenuItems(ownerId);
   const menuItems: MenuItem[] = (menuItemsData as MenuItem[]) || [];
@@ -64,6 +67,21 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
     });
   };
 
+  // Add a one-off item while editing an order (doesn't persist to menu)
+  const addOneOffItem = () => {
+    const price = parseFloat(oneOffPrice);
+    if (!oneOffName || isNaN(price) || price <= 0) {
+      toast({ title: 'Invalid one-off item', description: 'Enter a name and valid price.', variant: 'destructive' });
+      return;
+    }
+
+    const id = `oneoff-${Date.now()}`;
+    const item: CartItem = { id, name: oneOffName, quantity: 1, unitPrice: price, total: price };
+    setOrderItems(prev => [...prev, item]);
+    setOneOffName('');
+    setOneOffPrice('');
+  };
+
   const updateQuantity = (id: string, change: number) => {
     setOrderItems(prev => prev.map(p => {
       if (p.id !== id) return p;
@@ -90,7 +108,16 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
     }
 
     // Prevent editing orders older than 12 hours
-    const createdAt = orderRow.created_at ? new Date(orderRow.created_at) : null;
+    const parseDbTimestamp = (ts: any): Date | null => {
+      if (!ts) return null;
+      if (ts instanceof Date) return ts;
+      const s = String(ts);
+      if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(s) || s.includes('T') && s.endsWith('Z')) {
+        return new Date(s);
+      }
+      return new Date(s.replace(' ', 'T') + 'Z');
+    };
+    const createdAt = parseDbTimestamp(orderRow.created_at);
     if (createdAt) {
       const twelveHours = 12 * 60 * 60 * 1000;
       if ((Date.now() - createdAt.getTime()) > twelveHours) {
@@ -174,6 +201,8 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
                         <SelectItem value="B">B</SelectItem>
                         <SelectItem value="C">C</SelectItem>
                         <SelectItem value="D">D</SelectItem>
+                        <SelectItem value="T">T</SelectItem>
+                        <SelectItem value="G">G</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -182,9 +211,18 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
                     <Select value={tableNumber ?? ''} onValueChange={(v) => setTableNumber(v || null)}>
                       <SelectTrigger className="text-sm"><SelectValue placeholder="-" /></SelectTrigger>
                       <SelectContent>
-                        {(tableGroup ? Array.from({ length: 5 }, (_, i) => `${tableGroup}${i+1}`) : []).map(t => (
-                          <SelectItem key={t} value={t}>{t}</SelectItem>
-                        ))}
+                        {(() => {
+                          if (!tableGroup) return null;
+                          if (tableGroup === 'T') return ['T0', 'T1', 'T2', 'T3'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>);
+                          if (tableGroup === 'G') return ['G0', 'G1', 'G2'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>);
+                          if (['A', 'B', 'C'].includes(tableGroup)) return Array.from({ length: 8 }, (_, i) => `${tableGroup}${i+1}`).map(t => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ));
+                          if (tableGroup === 'D') return Array.from({ length: 2 }, (_, i) => `${tableGroup}${i+1}`).map(t => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ));
+                          return null;
+                        })()}
                       </SelectContent>
                     </Select>
                   </div>
@@ -199,6 +237,15 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
                       <input type="radio" name="edit-payment" value="online" checked={paymentMethod === 'online'} onChange={() => setPaymentMethod('online')} /> Online
                     </label>
                   </div>
+                </div>
+              </div>
+              {/* One-off item inputs for edits */}
+              <div className="mt-3">
+                <Label className="text-xs">Add one-off item</Label>
+                <div className="flex items-center gap-2 mt-2">
+                  <Input placeholder="Item name" value={oneOffName} onChange={(e) => setOneOffName(e.target.value)} className="text-sm" />
+                  <Input placeholder="0.00" value={oneOffPrice} onChange={(e) => setOneOffPrice(e.target.value)} type="number" step="0.01" className="w-28 text-sm" />
+                  <Button size="sm" onClick={addOneOffItem}>Add</Button>
                 </div>
               </div>
               <div className="space-y-2 max-h-80 overflow-y-auto">

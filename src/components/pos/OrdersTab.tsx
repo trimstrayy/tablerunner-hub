@@ -83,23 +83,22 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
           /* margin: top right bottom left */
           @page { size: 78mm auto; margin: 8mm 5mm 6mm 5mm; }
           body {
-            /* Use a high-contrast, widely-available sans-serif for better print legibility */
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            /* Use the original monospace courier which often prints reliably on thermal printers */
+            font-family: 'Courier New', Courier, monospace;
             margin: 0;
             padding: 0;
             background: white;
             color: #000;
             -webkit-print-color-adjust: exact;
-            -webkit-font-smoothing: antialiased;
             font-weight: 400;
           }
-          /* Printable content width = 78mm - 5mm(left) - 5mm(right) = 68mm */
+          /* Printable content width reduced to 62mm to add breathing room and avoid clipping */
           .receipt {
-            width: 68mm;
-            max-width: 68mm;
+            width: 62mm;
+            max-width: 62mm;
             margin: 0 auto;
             /* internal padding to keep content away from edges (top particularly) */
-            padding: 2mm 0 2mm 0;
+            padding: 3mm 0 3mm 0;
             box-sizing: border-box;
           }
           .receipt-header {
@@ -112,14 +111,14 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
             margin: 1px 0;
             font-size: 12px;
             line-height: 1;
-            font-weight: 800; /* bold store name */
+            font-weight: 900; /* stronger bold for store name */
             letter-spacing: 0.2px;
           }
           .receipt-header p {
             margin: 0px 0;
             font-size: 8px;
             line-height: 1;
-            font-weight: 600; /* make address/phone clearer */
+            font-weight: 700; /* stronger weight for address/phone */
           }
           .order-details {
             text-align: center;
@@ -134,7 +133,7 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
           .items-header {
             display: flex;
             justify-content: space-between;
-            font-weight: 700;
+            font-weight: 800; /* bolder header labels */
             font-size: 8px;
             border-bottom: 1px solid #000;
             padding-bottom: 2px;
@@ -148,23 +147,24 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
             padding-bottom: 1px;
             border-bottom: 1px dotted #eee;
             color: #000;
-            font-weight: 500; /* slightly bolder for item lines */
+            font-weight: 700; /* heavier for better thermal contrast */
           }
           .item-name {
             flex: 1;
+            font-weight: 700; /* make item names bold */
           }
           /* Use mm units so widths align to the printable area; remaining space used by item name */
           .item-qty {
-            width: 8mm;
+            width: 7mm;
             text-align: center;
           }
           .item-price {
-            width: 16mm;
+            width: 14mm;
             text-align: right;
             font-weight: 600;
           }
           .item-total {
-            width: 22mm;
+            width: 18mm;
             text-align: right;
             font-weight: 700; /* emphasis on totals for readability */
           }

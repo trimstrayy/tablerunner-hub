@@ -29,6 +29,23 @@ export function DashboardTab({ user }: DashboardTabProps) {
   // raw DB order row for the currently selected order (contains optional fields like customer_name/table)
   const rawSelectedOrder = selectedOrder ? (ordersData.find((r: any) => r.id === selectedOrder.id) as any) : null;
 
+  // Helper to parse timestamps returned from Supabase reliably.
+  // Supabase may return strings like '2025-10-17 14:33:00' (no timezone) or
+  // ISO strings with timezone. If timezone is missing, treat the value as UTC
+  // by appending 'Z' so JS converts it to the user's local timezone correctly.
+  const parseDbTimestamp = (ts: any): Date | null => {
+    if (!ts) return null;
+    if (ts instanceof Date) return ts;
+    const s = String(ts);
+    // If string already contains timezone info (Z or +HH or -HH), parse directly
+    if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(s) || s.includes('T') && s.endsWith('Z')) {
+      return new Date(s);
+    }
+    // Replace space between date and time with 'T' then append 'Z' to treat as UTC
+    const normalized = s.replace(' ', 'T') + 'Z';
+    return new Date(normalized);
+  };
+
   // Transform Supabase data to match our display format
   const orders = ordersData.map((order: any) => {
     const customerName: string | null = order.customer_name ?? null;
@@ -37,7 +54,7 @@ export function DashboardTab({ user }: DashboardTabProps) {
     const tableGroup: string | null = order.table_group ?? null;
     const combinedTable = tableNumber ?? (tableGroup ? `${tableGroup}${order.table_index ?? ''}`.replace(/\s+$/,'') : null);
     const displayLabel = customerName || combinedTable
-      ? [customerName, combinedTable].filter(Boolean).join(' — ')
+      ? [customerName, combinedTable].filter(Boolean).join('  ')
       : `Order #${order.order_number}`;
 
     return {
@@ -46,9 +63,10 @@ export function DashboardTab({ user }: DashboardTabProps) {
       displayLabel,
       customerName,
       tableNumber: combinedTable,
-      date: new Date(order.created_at),
+      date: parseDbTimestamp(order.created_at),
       items: order.order_items?.map((item: any) => ({
-        name: item.menu_items?.name || 'Unknown Item',
+        // Prefer linked menu item name, then one-off `name` column, then a fallback
+        name: item.menu_items?.name || item.name || 'Unknown Item',
         quantity: item.quantity,
         price: item.price
       })) || [],
@@ -162,18 +180,20 @@ export function DashboardTab({ user }: DashboardTabProps) {
         <title>Receipt #${order.orderNumber}</title>
         <style>
           @page { size: 78mm auto; margin: 8mm 5mm 6mm 5mm; }
-          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin:0; padding:0; background:white; color:#000; -webkit-font-smoothing:antialiased; }
-          .receipt { width:68mm; max-width:68mm; margin:0 auto; padding:2mm 0 2mm 0; box-sizing:border-box; }
+          body { font-family: 'Courier New', Courier, monospace; margin:0; padding:0; background:white; color:#000; }
+          /* shrink printable content to ensure it fits within printer's effective area */
+          .receipt { width:62mm; max-width:62mm; margin:0 auto; padding:3mm 0 3mm 0; box-sizing:border-box; }
           .receipt-header { text-align:center; border-bottom:1px dashed #000; padding-bottom:6px; margin-bottom:6px; }
-          .receipt-header h1{ margin:1px 0; font-size:12px; line-height:1; font-weight:800; }
+          .receipt-header h1{ margin:1px 0; font-size:12px; line-height:1; font-weight:700; }
           .receipt-header p{ margin:0; font-size:8px; font-weight:600 }
           .order-details{ text-align:center; border-bottom:1px dashed #000; padding-bottom:4px; margin-bottom:4px; font-size:9px }
           .items-header{ display:flex; justify-content:space-between; font-weight:700; font-size:8px; border-bottom:1px solid #000; padding-bottom:2px; margin-bottom:3px }
           .item-row{ display:flex; justify-content:space-between; font-size:8px; margin-bottom:1px; padding-bottom:1px; border-bottom:1px dotted #eee; font-weight:500 }
           .item-name{ flex:1 }
-          .item-qty{ width:8mm; text-align:center }
-          .item-price{ width:16mm; text-align:right; font-weight:600 }
-          .item-total{ width:22mm; text-align:right; font-weight:700 }
+          .item-name{ flex:1; font-weight:700 }
+          .item-qty{ width:7mm; text-align:center }
+          .item-price{ width:14mm; text-align:right; font-weight:600 }
+          .item-total{ width:18mm; text-align:right; font-weight:700 }
           .totals{ border-top:1px dashed #000; border-bottom:1px dashed #000; padding:4px 0; margin:4px 0; font-size:9px }
           .total-row{ display:flex; justify-content:space-between; margin-bottom:2px }
           .total-row.final{ font-weight:900; font-size:11px }
