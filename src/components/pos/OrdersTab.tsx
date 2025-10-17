@@ -83,12 +83,15 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
           /* margin: top right bottom left */
           @page { size: 78mm auto; margin: 8mm 5mm 6mm 5mm; }
           body {
-            font-family: 'Courier New', monospace;
+            /* Use a high-contrast, widely-available sans-serif for better print legibility */
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
             margin: 0;
             padding: 0;
             background: white;
             color: #000;
             -webkit-print-color-adjust: exact;
+            -webkit-font-smoothing: antialiased;
+            font-weight: 400;
           }
           /* Printable content width = 78mm - 5mm(left) - 5mm(right) = 68mm */
           .receipt {
@@ -109,11 +112,14 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
             margin: 1px 0;
             font-size: 12px;
             line-height: 1;
+            font-weight: 800; /* bold store name */
+            letter-spacing: 0.2px;
           }
           .receipt-header p {
             margin: 0px 0;
             font-size: 8px;
             line-height: 1;
+            font-weight: 600; /* make address/phone clearer */
           }
           .order-details {
             text-align: center;
@@ -128,7 +134,7 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
           .items-header {
             display: flex;
             justify-content: space-between;
-            font-weight: bold;
+            font-weight: 700;
             font-size: 8px;
             border-bottom: 1px solid #000;
             padding-bottom: 2px;
@@ -141,6 +147,8 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
             margin-bottom: 1px;
             padding-bottom: 1px;
             border-bottom: 1px dotted #eee;
+            color: #000;
+            font-weight: 500; /* slightly bolder for item lines */
           }
           .item-name {
             flex: 1;
@@ -153,10 +161,12 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
           .item-price {
             width: 16mm;
             text-align: right;
+            font-weight: 600;
           }
           .item-total {
             width: 22mm;
             text-align: right;
+            font-weight: 700; /* emphasis on totals for readability */
           }
           .totals {
             border-top: 1px dashed #000;
@@ -171,8 +181,8 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
             margin-bottom: 2px;
           }
           .total-row.final {
-            font-weight: bold;
-            font-size: 11px;
+            font-weight: 900;
+            font-size: 12px;
           }
           .discount-row {
             color: #d32f2f;

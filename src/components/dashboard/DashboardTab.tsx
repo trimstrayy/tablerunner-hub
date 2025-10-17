@@ -162,21 +162,21 @@ export function DashboardTab({ user }: DashboardTabProps) {
         <title>Receipt #${order.orderNumber}</title>
         <style>
           @page { size: 78mm auto; margin: 8mm 5mm 6mm 5mm; }
-          body { font-family: 'Courier New', monospace; margin:0; padding:0; background:white; color:#000; }
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin:0; padding:0; background:white; color:#000; -webkit-font-smoothing:antialiased; }
           .receipt { width:68mm; max-width:68mm; margin:0 auto; padding:2mm 0 2mm 0; box-sizing:border-box; }
           .receipt-header { text-align:center; border-bottom:1px dashed #000; padding-bottom:6px; margin-bottom:6px; }
-          .receipt-header h1{ margin:1px 0; font-size:12px; line-height:1 }
-          .receipt-header p{ margin:0; font-size:8px }
+          .receipt-header h1{ margin:1px 0; font-size:12px; line-height:1; font-weight:800; }
+          .receipt-header p{ margin:0; font-size:8px; font-weight:600 }
           .order-details{ text-align:center; border-bottom:1px dashed #000; padding-bottom:4px; margin-bottom:4px; font-size:9px }
-          .items-header{ display:flex; justify-content:space-between; font-weight:bold; font-size:8px; border-bottom:1px solid #000; padding-bottom:2px; margin-bottom:3px }
-          .item-row{ display:flex; justify-content:space-between; font-size:8px; margin-bottom:1px; padding-bottom:1px; border-bottom:1px dotted #eee }
+          .items-header{ display:flex; justify-content:space-between; font-weight:700; font-size:8px; border-bottom:1px solid #000; padding-bottom:2px; margin-bottom:3px }
+          .item-row{ display:flex; justify-content:space-between; font-size:8px; margin-bottom:1px; padding-bottom:1px; border-bottom:1px dotted #eee; font-weight:500 }
           .item-name{ flex:1 }
           .item-qty{ width:8mm; text-align:center }
-          .item-price{ width:16mm; text-align:right }
-          .item-total{ width:22mm; text-align:right }
+          .item-price{ width:16mm; text-align:right; font-weight:600 }
+          .item-total{ width:22mm; text-align:right; font-weight:700 }
           .totals{ border-top:1px dashed #000; border-bottom:1px dashed #000; padding:4px 0; margin:4px 0; font-size:9px }
           .total-row{ display:flex; justify-content:space-between; margin-bottom:2px }
-          .total-row.final{ font-weight:bold; font-size:11px }
+          .total-row.final{ font-weight:900; font-size:11px }
           .footer{ text-align:center; margin-top:4px; font-size:8px }
           @media print { @page { size:78mm auto; margin:8mm 5mm 6mm 5mm } html,body{ width:78mm; margin:0; padding:0 } .receipt{ width:68mm; padding:2mm 0 2mm 0 } }
         </style>
