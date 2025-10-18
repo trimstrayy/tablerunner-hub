@@ -37,6 +37,10 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | null>(null);
   const { data: menuItemsData = [], isLoading: isLoadingMenu } = useMenuItems(ownerId);
   const menuItems: MenuItem[] = (menuItemsData as MenuItem[]) || [];
+  // derive categories for filter
+  const categories = Array.from(new Set(menuItems.map(m => m.category))).filter(Boolean) as string[];
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const updateOrder = useUpdateOrder();
   const { toast } = useToast();
 
@@ -160,7 +164,7 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-4xl shadow-professional">
+      <Card className="w-full max-w-6xl shadow-professional">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Edit Order #{orderRow?.order_number}</span>
@@ -170,14 +174,46 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            {/* Categories sidebar */}
+            <div className="hidden lg:block">
+              <div className="mb-2">
+                <h4 className="font-medium">Categories</h4>
+                <div className="mt-2 space-y-2">
+                  <button
+                    onClick={() => setSelectedCategory('All')}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium ${selectedCategory === 'All' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+                    All
+                  </button>
+                  {categories.map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setSelectedCategory(c)}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium ${selectedCategory === c ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Menu items */}
             <div className="lg:col-span-2">
               <div className="mb-2 flex items-center justify-between">
                 <h4 className="font-medium">Menu</h4>
-                <div className="text-sm text-muted-foreground">{isLoadingMenu ? 'Loading...' : `${menuItems.length} items`}</div>
+                <div className="flex items-center space-x-3">
+                  <div className="text-sm text-muted-foreground">{isLoadingMenu ? 'Loading...' : `${menuItems.length} items`}</div>
+                  <div>
+                    <Input placeholder="Search products..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="text-sm" />
+                  </div>
+                </div>
               </div>
+
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-96 overflow-y-auto p-2">
-                {menuItems.map(item => (
+                {(
+                  (selectedCategory === 'All' ? menuItems : menuItems.filter(m => m.category === selectedCategory))
+                  .filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                ).map(item => (
                   <div key={item.id} className="p-2 border rounded-lg cursor-pointer hover:shadow" onClick={() => addToOrder(item)}>
                     <div className="text-sm font-medium">{item.name}</div>
                     <div className="text-xs text-muted-foreground">NRs {item.price}</div>
