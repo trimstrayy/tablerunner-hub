@@ -283,8 +283,8 @@ export function DashboardTab({ user }: DashboardTabProps) {
           </div>
           <div class="order-details">
             <p><strong>Order #${order.orderNumber}</strong></p>
-            <p>Date: ${new Date(order.date).toLocaleDateString()}</p>
-            <p>Time: ${new Date(order.date).toLocaleTimeString()}</p>
+            <p>Date: ${new Date().toLocaleDateString()}</p>
+            <p>Time: ${new Date().toLocaleTimeString()}</p>
             ${order.customerName ? `<p>Customer: ${order.customerName}</p>` : ''}
             ${order.tableNumber ? `<p>Table: ${order.tableNumber}</p>` : ''}
             ${order.paymentMethod ? `<p>Payment: ${order.paymentMethod === 'cash' ? 'Cash' : 'Online'}</p>` : ''}
