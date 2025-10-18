@@ -81,7 +81,7 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
           <style>
           /* Target 78mm thermal receipts: larger top margin to avoid header clipping */
           /* margin: top right bottom left */
-          @page { size: 78mm auto; margin: 8mm 5mm 6mm 5mm; }
+          @page { size: 78mm auto; margin: 8mm 5mm 6mm 3mm; }
           body {
             /* Use the original monospace courier which often prints reliably on thermal printers */
             font-family: 'Courier New', Courier, monospace;
@@ -98,7 +98,7 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
             max-width: 62mm;
             margin: 0 auto;
             /* internal padding to keep content away from edges (top particularly) */
-            padding: 3mm 0 3mm 0;
+            padding: 3mm 1mm 3mm 1mm; /* tighten left/right padding to allow more space */
             box-sizing: border-box;
           }
           .receipt-header {
@@ -109,42 +109,44 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
           }
           .receipt-header h1 {
             margin: 1px 0;
-            font-size: 12px;
+            font-size: 14px; /* increased for better readability */
             line-height: 1;
             font-weight: 900; /* stronger bold for store name */
             letter-spacing: 0.2px;
           }
           .receipt-header p {
             margin: 0px 0;
-            font-size: 8px;
+            font-size: 10px; /* slightly larger */
             line-height: 1;
             font-weight: 700; /* stronger weight for address/phone */
           }
           .order-details {
             text-align: center;
             border-bottom: 1px dashed #000;
-            padding-bottom: 4px;
-            margin-bottom: 4px;
-            font-size: 9px;
+            padding: 6px 0 6px 0; /* increased vertical padding to avoid clipping */
+            margin: 6px 0 8px 0;
+            font-size: 12px; /* slightly larger */
+            line-height: 1.2; /* make more room vertically */
+            font-weight: 700; /* make date/time/customer/table/payment bold */
           }
           .order-details p {
-            margin: 3px 0;
+            margin: 4px 0; /* slightly larger vertical spacing */
           }
           .items-header {
             display: flex;
             justify-content: space-between;
             font-weight: 800; /* bolder header labels */
-            font-size: 8px;
+            font-size: 11px; /* increased */
             border-bottom: 1px solid #000;
-            padding-bottom: 2px;
-            margin-bottom: 3px;
+            padding-bottom: 4px;
+            margin-bottom: 4px;
           }
           .item-row {
             display: flex;
             justify-content: space-between;
-            font-size: 8px;
-            margin-bottom: 1px;
-            padding-bottom: 1px;
+            font-size: 11px; /* increased */
+            margin-bottom: 2px;
+            padding: 2px 0;
             border-bottom: 1px dotted #eee;
             color: #000;
             font-weight: 700; /* heavier for better thermal contrast */
@@ -171,9 +173,10 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
           .totals {
             border-top: 1px dashed #000;
             border-bottom: 1px dashed #000;
-            padding: 4px 0;
-            margin: 4px 0;
-            font-size: 9px;
+            padding: 6px 0; /* increased vertical padding for legibility */
+            margin: 6px 0;
+            font-size: 12px; /* slightly larger */
+            font-weight: 700;
           }
           .total-row {
             display: flex;
@@ -182,21 +185,23 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
           }
           .total-row.final {
             font-weight: 900;
-            font-size: 12px;
+            font-size: 14px; /* increased */
           }
           .discount-row {
             color: #d32f2f;
           }
           .footer {
             text-align: center;
-            margin-top: 4px;
-            font-size: 8px;
+            margin-top: 6px;
+            font-size: 11px; /* increased */
+            font-weight: 700;
           }
           @media print {
             /* Ensure print-time page settings align with the mm-based layout */
             @page { size: 78mm auto; margin: 8mm 5mm 6mm 5mm; }
             html, body { width: 78mm; margin: 0; padding: 0; }
-            .receipt { width: 68mm; margin: 0; padding: 2mm 0 2mm 0; }
+            /* Keep print receipt content slightly narrower than page to avoid clipping */
+            .receipt { width: 62mm; max-width: 62mm; margin: 0 auto; padding: 4mm 1mm 4mm 1mm; }
             body { -webkit-print-color-adjust: exact; }
           }
         </style>

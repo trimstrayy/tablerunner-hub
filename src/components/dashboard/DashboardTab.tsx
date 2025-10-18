@@ -179,26 +179,98 @@ export function DashboardTab({ user }: DashboardTabProps) {
       <head>
         <title>Receipt #${order.orderNumber}</title>
         <style>
-          @page { size: 78mm auto; margin: 8mm 5mm 6mm 5mm; }
-          body { font-family: 'Courier New', Courier, monospace; margin:0; padding:0; background:white; color:#000; }
-          /* shrink printable content to ensure it fits within printer's effective area */
-          .receipt { width:62mm; max-width:62mm; margin:0 auto; padding:3mm 0 3mm 0; box-sizing:border-box; }
-          .receipt-header { text-align:center; border-bottom:1px dashed #000; padding-bottom:6px; margin-bottom:6px; }
-          .receipt-header h1{ margin:1px 0; font-size:12px; line-height:1; font-weight:700; }
-          .receipt-header p{ margin:0; font-size:8px; font-weight:600 }
-          .order-details{ text-align:center; border-bottom:1px dashed #000; padding-bottom:4px; margin-bottom:4px; font-size:9px }
-          .items-header{ display:flex; justify-content:space-between; font-weight:700; font-size:8px; border-bottom:1px solid #000; padding-bottom:2px; margin-bottom:3px }
-          .item-row{ display:flex; justify-content:space-between; font-size:8px; margin-bottom:1px; padding-bottom:1px; border-bottom:1px dotted #eee; font-weight:500 }
-          .item-name{ flex:1 }
-          .item-name{ flex:1; font-weight:700 }
-          .item-qty{ width:7mm; text-align:center }
-          .item-price{ width:14mm; text-align:right; font-weight:600 }
-          .item-total{ width:18mm; text-align:right; font-weight:700 }
-          .totals{ border-top:1px dashed #000; border-bottom:1px dashed #000; padding:4px 0; margin:4px 0; font-size:9px }
-          .total-row{ display:flex; justify-content:space-between; margin-bottom:2px }
-          .total-row.final{ font-weight:900; font-size:11px }
-          .footer{ text-align:center; margin-top:4px; font-size:8px }
-          @media print { @page { size:78mm auto; margin:8mm 5mm 6mm 5mm } html,body{ width:78mm; margin:0; padding:0 } .receipt{ width:68mm; padding:2mm 0 2mm 0 } }
+          /* Target 78mm thermal receipts: larger top margin to avoid header clipping */
+          @page { size: 78mm auto; margin: 8mm 5mm 6mm 3mm; }
+          body {
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 0;
+            background: white;
+            color: #000;
+            -webkit-print-color-adjust: exact;
+            font-weight: 400;
+          }
+          /* Printable content width reduced to 62mm to add breathing room and avoid clipping */
+          .receipt {
+            width: 62mm;
+            max-width: 62mm;
+            margin: 0 auto;
+            padding: 3mm 1mm 3mm 1mm; /* tighten left/right padding to allow more space */
+            box-sizing: border-box;
+          }
+          .receipt-header {
+            text-align: center;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+          }
+          .receipt-header h1 {
+            margin: 1px 0;
+            font-size: 14px;
+            line-height: 1;
+            font-weight: 900;
+            letter-spacing: 0.2px;
+          }
+          .receipt-header p {
+            margin: 0px 0;
+            font-size: 10px;
+            line-height: 1;
+            font-weight: 700;
+          }
+          .order-details {
+            text-align: center;
+            border-bottom: 1px dashed #000;
+            padding: 6px 0 6px 0; /* increased vertical padding to avoid clipping */
+            margin: 6px 0 8px 0;
+            font-size: 12px; /* slightly larger */
+            line-height: 1.2; /* make more room vertically */
+            font-weight: 700; /* make date/time/customer/table/payment bold */
+          }
+          .order-details p {
+            margin: 4px 0; /* slightly larger vertical spacing */
+          }
+          .items-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 800; /* bolder header labels */
+            font-size: 11px; /* increased */
+            border-bottom: 1px solid #000;
+            padding-bottom: 4px;
+            margin-bottom: 4px;
+          }
+          .item-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px; /* increased */
+            margin-bottom: 2px;
+            padding: 2px 0;
+            border-bottom: 1px dotted #eee;
+            color: #000;
+            font-weight: 700; /* heavier for better thermal contrast */
+          }
+          .item-name { flex: 1; font-weight: 700; }
+          .item-qty { width: 7mm; text-align: center; }
+          .item-price { width: 14mm; text-align: right; font-weight: 600; }
+          .item-total { width: 18mm; text-align: right; font-weight: 700; }
+          .totals {
+            border-top: 1px dashed #000;
+            border-bottom: 1px dashed #000;
+            padding: 6px 0; /* increased vertical padding for legibility */
+            margin: 6px 0;
+            font-size: 12px; /* slightly larger */
+            font-weight: 700;
+          }
+          .total-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+          .total-row.final { font-weight: 900; font-size: 14px; }
+          .discount-row { color: #d32f2f; }
+          .footer { text-align: center; margin-top: 6px; font-size: 11px; font-weight: 700; }
+          @media print {
+            @page { size: 78mm auto; margin: 8mm 5mm 6mm 5mm; }
+            html, body { width: 78mm; margin: 0; padding: 0; }
+            /* Keep print receipt content slightly narrower than page to avoid clipping */
+            .receipt { width: 62mm; max-width: 62mm; margin: 0 auto; padding: 4mm 1mm 4mm 1mm; }
+            body { -webkit-print-color-adjust: exact; }
+          }
         </style>
       </head>
       <body>
