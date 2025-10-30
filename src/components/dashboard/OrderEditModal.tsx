@@ -35,6 +35,8 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
   const [oneOffName, setOneOffName] = useState('');
   const [oneOffPrice, setOneOffPrice] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online' | null>(null);
+  const [paid, setPaid] = useState(false);
+  const [paidAmount, setPaidAmount] = useState(0);
   const { data: menuItemsData = [], isLoading: isLoadingMenu } = useMenuItems(ownerId);
   const menuItems: MenuItem[] = (menuItemsData as MenuItem[]) || [];
   // derive categories for filter
@@ -59,6 +61,9 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
     setTableNumber(orderRow.table_number || null);
     setTableGroup(orderRow.table_group || null);
     setPaymentMethod(orderRow.payment_method || null);
+    // payment status if available
+    setPaid(Boolean(orderRow.paid));
+    setPaidAmount(Number(orderRow.paid_amount || orderRow.paidAmount || 0));
   }, [orderRow]);
 
   const addToOrder = (menuItem: MenuItem) => {
@@ -146,6 +151,9 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
       subtotal,
       discount: orderRow.discount || 0,
       total: subtotal - (orderRow.discount || 0),
+      // preserve/update payment state
+      paid: paid || false,
+      paid_amount: paid ? Math.max(0, paidAmount) : 0,
       customer_name: customerName || null,
       table_group: tableGroup || null,
       table_number: tableNumber || null,
@@ -274,6 +282,30 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
                     </label>
                   </div>
                 </div>
+                <div className="mt-3">
+                  <Label className="text-xs">Paid</Label>
+                  <div className="flex items-center gap-3 mt-1">
+                    <label className="inline-flex items-center space-x-2">
+                      <input type="checkbox" checked={paid} onChange={(e) => {
+                        const now = e.target.checked;
+                        setPaid(now);
+                        if (now) {
+                          // if marking paid and no amount present, default to current subtotal
+                          if (!paidAmount) setPaidAmount(subtotal);
+                        } else {
+                          setPaidAmount(0);
+                        }
+                      }} />
+                      <span className="text-sm">Mark as paid</span>
+                    </label>
+                    {paid && (
+                      <div className="flex items-center space-x-2">
+                        <Input type="number" value={paidAmount} onChange={(e) => setPaidAmount(Number(e.target.value || 0))} className="w-28 text-sm" />
+                        <span className="text-xs text-muted-foreground">already paid</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
               {/* One-off item inputs for edits */}
               <div className="mt-3">
@@ -309,6 +341,8 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
               <Separator />
               <div className="mt-2 space-y-2">
                 <div className="flex justify-between text-sm"><span>Subtotal</span><span className="font-bold">NRs {subtotal}</span></div>
+                <div className="flex justify-between text-sm"><span>Paid</span><span className="font-bold">NRs {paidAmount}</span></div>
+                <div className="flex justify-between text-sm"><span>Balance</span><span className="font-bold">NRs {Math.max(0, subtotal - (paidAmount || 0))}</span></div>
                 <div className="flex gap-2">
                   <Button onClick={onClose} variant="outline" className="flex-1">Cancel</Button>
                   <Button onClick={handleSave} className="flex-1">{updateOrder.isPending ? (<><RefreshCw className="w-4 h-4 mr-2 animate-spin"/>Saving...</>) : (<><Save className="w-4 h-4 mr-2"/>Save Changes</>)}</Button>

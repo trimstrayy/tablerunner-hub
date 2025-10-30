@@ -317,17 +317,17 @@ export function DashboardTab({ user }: DashboardTabProps) {
     printInIframe(receiptHTML);
   };
 
-  // Calculate item sales summary
-  const itemSales = orders.reduce((acc: Record<string, number>, order: any) => {
+  // Calculate item sales summary (quantity + revenue) based on the active date filter (statsOrders)
+  const itemSales = statsOrders.reduce((acc: Record<string, { qty: number; revenue: number }>, order: any) => {
     order.items.forEach((item: any) => {
-      if (acc[item.name]) {
-        acc[item.name] += item.quantity * item.price;
-      } else {
-        acc[item.name] = item.quantity * item.price;
-      }
+      const qty = Number(item.quantity || 0);
+      const revenue = qty * Number(item.price || 0);
+      if (!acc[item.name]) acc[item.name] = { qty: 0, revenue: 0 };
+      acc[item.name].qty += qty;
+      acc[item.name].revenue += revenue;
     });
     return acc;
-  }, {} as Record<string, number>);
+  }, {} as Record<string, { qty: number; revenue: number }>);
 
   return (
     <div className="space-y-6">
@@ -608,18 +608,22 @@ export function DashboardTab({ user }: DashboardTabProps) {
             ) : (
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {Object.entries(itemSales)
-                  .sort(([,a], [,b]) => (b as number) - (a as number))
-                  .map(([item, revenue]) => (
-                  <div key={item} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-sm">{item}</p>
-                      <p className="text-xs text-muted-foreground">Total Revenue</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-primary">NRs {revenue as number}</p>
-                    </div>
-                  </div>
-                ))}
+                  .sort(([,a], [,b]) => b.revenue - a.revenue)
+                  .map(([item, data]) => {
+                    const qty = data.qty ?? 0;
+                    const revenue = data.revenue ?? 0;
+                    return (
+                      <div key={item} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                        <div>
+                          <p className="font-medium text-sm">{item}</p>
+                          <p className="text-xs text-muted-foreground">Qty: {qty}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-primary">NRs {revenue}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             )}
           </CardContent>

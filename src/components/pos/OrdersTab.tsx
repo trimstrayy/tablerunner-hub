@@ -49,6 +49,8 @@ export function OrdersTab({ user }: OrdersTabProps) {
   const [oneOffName, setOneOffName] = useState('');
   const [oneOffPrice, setOneOffPrice] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
+  const [paid, setPaid] = useState(false);
+  const [paidAmount, setPaidAmount] = useState(0);
   const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
   const [isEditingMenu, setIsEditingMenu] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -556,6 +558,9 @@ const handlePrint = async (e: React.MouseEvent) => {
         subtotal,
         discount: discountAmount,
         total,
+        // payment status fields
+        paid: paid || false,
+        paid_amount: paid ? Math.max(0, total) : (paidAmount || 0),
         // optional extra fields
         customer_name: customerName || null,
         table_group: tableGroup || null,
@@ -585,6 +590,9 @@ const handlePrint = async (e: React.MouseEvent) => {
       setCustomerName('');
       setTableGroup(null);
       setTableNumber(null);
+      // reset paid state after saving
+      setPaid(false);
+      setPaidAmount(0);
     } catch (error) {
       console.error('Error saving order:', error);
     }
@@ -1102,6 +1110,37 @@ const handlePrint = async (e: React.MouseEvent) => {
                         Online
                       </button>
                     </div>
+                  </div>
+                  <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center space-x-2">
+                      <label className="inline-flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={paid}
+                          onChange={(e) => {
+                            const now = e.target.checked;
+                            setPaid(now);
+                            // if marking paid, default paidAmount to current total
+                            if (now) setPaidAmount(Math.max(0, total));
+                            else setPaidAmount(0);
+                          }}
+                        />
+                        <span className="text-sm">Paid</span>
+                      </label>
+                      {paid && (
+                        <div className="flex items-center space-x-2">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={paidAmount}
+                            onChange={(e) => setPaidAmount(Number(e.target.value || 0))}
+                            className="w-28 h-6 text-sm"
+                          />
+                          <span className="text-xs text-muted-foreground">paid</span>
+                        </div>
+                      )}
+                    </div>
+                    <div />
                   </div>
                 </div>
                   <div className="flex gap-2">
