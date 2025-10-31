@@ -18,6 +18,9 @@ type Receipt = {
   unit?: string; // e.g., 'ltr'
   quantity?: number;
   rate?: number;
+  // optional for kirana item receipts
+  itemName?: string;
+  itemPrice?: number;
 };
 
 type Section = {
@@ -34,11 +37,13 @@ function AddReceiptModal({ open, onClose, onSave, section }: any) {
   const [due, setDue] = useState<number>(0);
   const [quantity, setQuantity] = useState<number>(0);
   const [rate, setRate] = useState<number | ''>('');
+  const [kiranaItemName, setKiranaItemName] = useState('');
+  const [kiranaItemPrice, setKiranaItemPrice] = useState<number | ''>('');
   const [selectedSource, setSelectedSource] = useState<{ type: 'firm' | 'one-off'; name: string } | null>(null);
   const [oneOffName, setOneOffName] = useState('');
 
   const SOURCES: Record<string, string[]> = {
-    Dairy: ['Firm 1', 'Firm 2', 'One-off'],
+    Dairy: ['Mama', 'Bhim uncle', 'One-off'],
     Bakery: ['Main', 'One-off'],
     Vegetables: ['Main', 'One-off'],
     Kirana: ['Main', 'One-off'],
@@ -48,6 +53,7 @@ function AddReceiptModal({ open, onClose, onSave, section }: any) {
     if (!open) {
       setDate(new Date().toISOString().slice(0,10)); setBill(0); setPaid(0); setDue(0);
       setQuantity(0); setRate(''); setSelectedSource(null); setOneOffName('');
+      setKiranaItemName(''); setKiranaItemPrice('');
     }
   }, [open]);
 
@@ -103,28 +109,50 @@ function AddReceiptModal({ open, onClose, onSave, section }: any) {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <Input type="number" value={bill} onChange={(e) => setBill(Number(e.target.value) || 0)} />
-                  <div className="flex-1">
-                    <div className="text-xs text-muted-foreground">Source</div>
+                section === 'Kirana' ? (
+                  <div className="space-y-2">
+                    <div>
+                      <Label className="text-xs">Item name</Label>
+                      <Input placeholder="Item name" value={kiranaItemName} onChange={(e) => setKiranaItemName(e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Price (NRs)</Label>
+                      <Input type="number" value={kiranaItemPrice === '' ? '' : String(kiranaItemPrice)} onChange={(e) => setKiranaItemPrice(e.target.value === '' ? '' : Number(e.target.value))} onBlur={() => { if (kiranaItemPrice !== '') setBill(Number(kiranaItemPrice || 0)); }} />
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Source</div>
                       <div className="mt-1 p-2 border rounded bg-background/50 min-h-[42px] flex items-center justify-between">
                         <div className="text-sm">{selectedSource ? (selectedSource.type === 'one-off' ? `One-off${oneOffName ? ` — ${oneOffName}` : ''}` : selectedSource.name) : 'Select a source'}</div>
                         {selectedSource && selectedSource.type === 'one-off' ? (
                           <Input placeholder="One-off name" value={oneOffName} onChange={(e) => setOneOffName(e.target.value)} className="w-48 ml-2" />
                         ) : null}
                       </div>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Input type="number" value={bill} onChange={(e) => setBill(Number(e.target.value) || 0)} />
+                    <div className="flex-1">
+                      <div className="text-xs text-muted-foreground">Source</div>
+                        <div className="mt-1 p-2 border rounded bg-background/50 min-h-[42px] flex items-center justify-between">
+                          <div className="text-sm">{selectedSource ? (selectedSource.type === 'one-off' ? `One-off${oneOffName ? ` — ${oneOffName}` : ''}` : selectedSource.name) : 'Select a source'}</div>
+                          {selectedSource && selectedSource.type === 'one-off' ? (
+                            <Input placeholder="One-off name" value={oneOffName} onChange={(e) => setOneOffName(e.target.value)} className="w-48 ml-2" />
+                          ) : null}
+                        </div>
+                    </div>
+                  </div>
+                )
               )}
-                  <div className="mt-2 flex items-center space-x-3">
+              <div className="mt-2 flex items-center space-x-3">
                 <div className="flex items-center space-x-2">
                   {(SOURCES[section] ?? ['One-off']).map(s => (
                     <Button key={s} size="sm" variant={selectedSource?.name === s ? 'default' : 'outline'} onClick={() => {
-                      // set default rates for dairy firms, otherwise set Main/One-off
-                      if (section === 'Dairy' && s === 'Firm 1') {
+                      // set default rates for dairy (Mama/Bhim uncle), otherwise set Main/One-off
+                      if (section === 'Dairy' && s === 'Mama') {
                         setSelectedSource({ type: 'firm', name: s });
                         setRate(110);
-                      } else if (section === 'Dairy' && s === 'Firm 2') {
+                      } else if (section === 'Dairy' && s === 'Bhim uncle') {
                         setSelectedSource({ type: 'firm', name: s });
                         setRate(120);
                       } else if (s === 'One-off') {
@@ -159,6 +187,12 @@ function AddReceiptModal({ open, onClose, onSave, section }: any) {
                     payload.quantity = Number(quantity || 0);
                     payload.rate = Number(rate || 0);
                   }
+                  if (section === 'Kirana') {
+                    payload.itemName = kiranaItemName;
+                    payload.itemPrice = Number(kiranaItemPrice || 0);
+                    // ensure bill reflects price entered
+                    if (payload.itemPrice > 0) payload.bill = payload.itemPrice;
+                  }
                   onSave(payload);
                 }}>Save</Button>
               </div>
@@ -190,7 +224,11 @@ export default function InventoryPage() {
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [showReceiptsFor, setShowReceiptsFor] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
-  const [sourceFilter, setSourceFilter] = useState<Record<string, 'all' | 'firm1' | 'firm2' | 'oneoff'>>({});
+  const [sourceFilter, setSourceFilter] = useState<Record<string, 'all' | 'firm1' | 'firm2' | 'oneoff' | 'main'>>({});
+  // view mode: recent (unpaid) or paid receipts
+  const [receiptView, setReceiptView] = useState<'recent' | 'paid'>('recent');
+  // date filter: all or today
+  const [dateFilter, setDateFilter] = useState<'all' | 'today'>('all');
   
 
   // Items and Staffs separate blocks
@@ -238,6 +276,8 @@ export default function InventoryPage() {
     const quantity = Number((arguments[0] as any)?.quantity || 0);
     const rate = Number((arguments[0] as any)?.rate || 0);
     const unit = (arguments[0] as any)?.unit;
+    const itemName = (arguments[0] as any)?.itemName;
+    const itemPrice = Number((arguments[0] as any)?.itemPrice || 0);
     const computedBill = (quantity > 0 && rate > 0) ? (quantity * rate) : Number(bill);
     const receipt: Receipt = {
       id: `r-${Date.now()}`,
@@ -249,6 +289,8 @@ export default function InventoryPage() {
       unit: unit || undefined,
       quantity: quantity > 0 ? quantity : undefined,
       rate: rate > 0 ? rate : undefined,
+      itemName: itemName || undefined,
+      itemPrice: itemPrice > 0 ? itemPrice : undefined,
     };
     setSections(prev => prev.map(sec => sec.name === activeSection ? ({ ...sec, receipts: [receipt, ...sec.receipts] }) : sec));
     setAddOpen(false); setActiveSection(null);
@@ -274,8 +316,26 @@ export default function InventoryPage() {
     return { totalBill, totalPaid, totalDue };
   };
 
+  // helper to test date filter
+  const matchesDateFilter = (isoDate: string) => {
+    if (dateFilter === 'all') return true;
+    try {
+      const d = new Date(isoDate).toDateString();
+      return d === new Date().toDateString();
+    } catch (e) { return true; }
+  };
+
+  // helper: whether a receipt is considered paid
+  const isPaidReceipt = (r: Receipt) => (Number(r.paidAmount || 0) >= Number(r.billAmount || 0));
+
   const overallTotals = sections.reduce((acc, sec) => {
-    const t = sectionTotals(sec);
+    // apply global view filters (receiptView + dateFilter)
+    const filtered = sec.receipts.filter(r => {
+      if (!matchesDateFilter(r.date)) return false;
+      if (receiptView === 'recent') return !isPaidReceipt(r);
+      return isPaidReceipt(r);
+    });
+    const t = filtered.reduce((s, r) => ({ totalBill: s.totalBill + (r.billAmount || 0), totalPaid: s.totalPaid + (r.paidAmount || 0), totalDue: s.totalDue + (r.dueAmount || 0) }), { totalBill: 0, totalPaid: 0, totalDue: 0 });
     acc.bill += t.totalBill; acc.paid += t.totalPaid; acc.due += t.totalDue; return acc;
   }, { bill: 0, paid: 0, due: 0 });
 
@@ -318,6 +378,16 @@ export default function InventoryPage() {
               <Button size="sm" variant="outline" onClick={() => { /* placeholder for refresh */ }}>Refresh</Button>
             </div>
           </div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant={receiptView === 'recent' ? 'default' : 'outline'} onClick={() => setReceiptView('recent')}>Recent</Button>
+              <Button size="sm" variant={receiptView === 'paid' ? 'default' : 'outline'} onClick={() => setReceiptView('paid')}>Paid</Button>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <Button size="sm" variant={dateFilter === 'all' ? 'default' : 'outline'} onClick={() => setDateFilter('all')}>All dates</Button>
+              <Button size="sm" variant={dateFilter === 'today' ? 'default' : 'outline'} onClick={() => setDateFilter('today')}>Today</Button>
+            </div>
+          </div>
 
           {/* If no section is expanded, render the original two-column grid of all sections */}
           {Object.values(expandedSections).every(v => !v) ? (
@@ -351,17 +421,30 @@ export default function InventoryPage() {
               </div>
 
               <div>
-                {sections.map(section => {
-                  if (!expandedSections[section.name]) return null;
-                  // source filter for this section (all | firm1 | firm2 | oneoff)
-                  const filterKey = sourceFilter[section.name] || 'all';
-                  const filteredReceipts = section.receipts.filter(r => {
-                    if (filterKey === 'all') return true;
-                    if (filterKey === 'firm1') return r.source?.type === 'firm' && r.source?.name === 'Firm 1';
-                    if (filterKey === 'firm2') return r.source?.type === 'firm' && r.source?.name === 'Firm 2';
-                    if (filterKey === 'oneoff') return r.source?.type === 'one-off' || (!r.source);
-                    return true;
-                  });
+                  {sections.map(section => {
+                    if (!expandedSections[section.name]) return null;
+                    // source filter for this section (all | firm1 | firm2 | oneoff | main)
+                    const filterKey = sourceFilter[section.name] || 'all';
+                    const filteredReceipts = section.receipts.filter(r => {
+                      // supplier filter
+                      if (filterKey === 'all') {
+                        // ok
+                      } else if (filterKey === 'firm1') {
+                        if (!(r.source?.type === 'firm' && r.source?.name === 'Mama')) return false;
+                      } else if (filterKey === 'firm2') {
+                        if (!(r.source?.type === 'firm' && r.source?.name === 'Bhim uncle')) return false;
+                      } else if (filterKey === 'main') {
+                        if (!(r.source?.type === 'firm' && r.source?.name === 'Main')) return false;
+                      } else if (filterKey === 'oneoff') {
+                        if (!(r.source?.type === 'one-off' || !r.source)) return false;
+                      }
+                      // date filter
+                      if (!matchesDateFilter(r.date)) return false;
+                      // paid/unpaid view filter
+                      if (receiptView === 'recent' && isPaidReceipt(r)) return false;
+                      if (receiptView === 'paid' && !isPaidReceipt(r)) return false;
+                      return true;
+                    });
                   const totals = filteredReceipts.reduce((acc, r) => ({ totalBill: acc.totalBill + (r.billAmount || 0), totalPaid: acc.totalPaid + (r.paidAmount || 0), totalDue: acc.totalDue + (r.dueAmount || 0) }), { totalBill: 0, totalPaid: 0, totalDue: 0 });
                   return (
                     <div key={section.name} className="border rounded-lg p-3 cursor-pointer" role="button" onClick={() => toggleSection(section.name)} aria-pressed={!!expandedSections[section.name]}>
@@ -386,7 +469,7 @@ export default function InventoryPage() {
                       {/* Source filter controls (per-section) */}
                       <div className="flex items-center gap-2 mb-3">
                         {((section.name === 'Dairy') ? ['all', 'firm1', 'firm2', 'oneoff'] : ['all', 'main', 'oneoff']).map(key => {
-                          const label = key === 'all' ? 'All' : key === 'firm1' ? 'Firm 1' : key === 'firm2' ? 'Firm 2' : key === 'main' ? 'Main' : 'One-off';
+                          const label = key === 'all' ? 'All' : key === 'firm1' ? 'Mama' : key === 'firm2' ? 'Bhim uncle' : key === 'main' ? 'Main' : 'One-off';
                           const isSelected = (sourceFilter[section.name] || 'all') === key;
                           return (
                             <Button key={key} size="sm" variant={isSelected ? 'default' : 'outline'} onClick={(e) => { e.stopPropagation(); setSourceFilter(prev => ({ ...prev, [section.name]: key as any })); }}>
@@ -410,8 +493,8 @@ export default function InventoryPage() {
                                         const showOneOff = (filterKey === 'all' || filterKey === 'oneoff');
                                         return (
                                           <>
-                                            {showFirm1 && <th className="text-center">Firm 1</th>}
-                                            {showFirm2 && <th className="text-center">Firm 2</th>}
+                                            {showFirm1 && <th className="text-center">Mama</th>}
+                                            {showFirm2 && <th className="text-center">Bhim uncle</th>}
                                             {showMain && <th className="text-center">Main</th>}
                                             {showOneOff && <th className="text-center">One-off</th>}
                                           </>
@@ -434,10 +517,10 @@ export default function InventoryPage() {
                                           return (
                                             <>
                                               {showFirm1 && (
-                                                <td className="py-2 text-center">{r.source && r.source.type === 'firm' && r.source.name === 'Firm 1' ? `NRs ${r.billAmount}` : '-'}</td>
+                                                <td className="py-2 text-center">{r.source && r.source.type === 'firm' && r.source.name === 'Mama' ? `NRs ${r.billAmount}` : '-'}</td>
                                               )}
                                               {showFirm2 && (
-                                                <td className="py-2 text-center">{r.source && r.source.type === 'firm' && r.source.name === 'Firm 2' ? `NRs ${r.billAmount}` : '-'}</td>
+                                                <td className="py-2 text-center">{r.source && r.source.type === 'firm' && r.source.name === 'Bhim uncle' ? `NRs ${r.billAmount}` : '-'}</td>
                                               )}
                                               {showMain && (
                                                 <td className="py-2 text-center">{r.source && r.source.type === 'firm' && r.source.name === 'Main' ? `NRs ${r.billAmount}` : '-'}</td>
@@ -452,9 +535,21 @@ export default function InventoryPage() {
                                           <div>NRs {r.paidAmount}</div>
                                           {r.unit && r.quantity ? (
                                             <div className="text-xs text-muted-foreground">{r.quantity} {r.unit} @ NRs {r.rate}</div>
+                                          ) : r.itemName ? (
+                                            <div className="text-xs text-muted-foreground">{r.itemName} @ NRs {r.itemPrice}</div>
                                           ) : null}
                                         </td>
                                         <td className="py-2">NRs {r.dueAmount}</td>
+                                        <td className="py-2 text-right">
+                                          {!isPaidReceipt(r) ? (
+                                            <Button size="sm" onClick={(e) => { e.stopPropagation();
+                                              // mark this receipt as paid
+                                              setSections(prev => prev.map(sec => sec.name === section.name ? ({ ...sec, receipts: sec.receipts.map(rr => rr.id === r.id ? ({ ...rr, paidAmount: rr.billAmount, dueAmount: 0 }) : rr) }) : sec));
+                                            }}>Mark paid</Button>
+                                          ) : (
+                                            <div className="text-xs text-muted-foreground">Paid</div>
+                                          )}
+                                        </td>
                                       </tr>
                                     ))}
                                   </tbody>

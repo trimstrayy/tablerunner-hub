@@ -22,6 +22,7 @@ export function DashboardTab({ user }: DashboardTabProps) {
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'custom'>('all');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'unpaid'>('unpaid');
 
   // Fetch orders from Supabase
   const { data: ordersData = [], isLoading, refetch } = useOrders(user.id);
@@ -73,6 +74,8 @@ export function DashboardTab({ user }: DashboardTabProps) {
       subtotal: order.subtotal || 0,
       discount: order.discount || 0,
       total: order.total || 0,
+  paidAmount: Number(order.paid_amount ?? order.paidAmount ?? 0),
+  paid: !!(order.paid || (Number(order.paid_amount ?? order.paidAmount ?? 0) >= Number(order.total || 0))),
       status: order.closed ? 'closed' as const : 'completed' as const,
       closed: !!order.closed,
       // Payment method may be stored as payment_method or paymentMethod in returned row
@@ -90,8 +93,16 @@ export function DashboardTab({ user }: DashboardTabProps) {
     return true; // 'all' - show all orders
   });
 
-  // Apply search filtering on top of date filtering
-  const filteredOrders = dateFilteredOrders.filter((order: any) => {
+  // Apply payment filtering on top of date filtering
+  const paymentFilteredOrders = dateFilteredOrders.filter((order: any) => {
+    if (paymentFilter === 'all') return true;
+    if (paymentFilter === 'paid') return !!order.paid;
+    if (paymentFilter === 'unpaid') return !order.paid;
+    return true;
+  });
+
+  // Apply search filtering on top of payment+date filtering
+  const filteredOrders = paymentFilteredOrders.filter((order: any) => {
     const term = searchTerm.toString().toLowerCase();
     if (!term) return true;
     // match by order number
@@ -525,6 +536,12 @@ export function DashboardTab({ user }: DashboardTabProps) {
                   Clear Filter
                 </Button>
               )}
+              {/* Single Paid toggle: default shows unpaid orders; click to view paid bills */}
+              <div className="ml-4">
+                <Button size="sm" variant={paymentFilter === 'paid' ? 'default' : 'outline'} onClick={() => setPaymentFilter(prev => prev === 'paid' ? 'unpaid' : 'paid')}>
+                  Paid
+                </Button>
+              </div>
             </div>
             
             <div className="relative">
@@ -560,11 +577,11 @@ export function DashboardTab({ user }: DashboardTabProps) {
                     <div className="flex-1">
                       <div className="flex items-center space-x-2">
                         <p className="font-medium">{order.displayLabel}</p>
-                        <Badge 
-                          variant={order.status === 'completed' ? 'default' : 'secondary'}
-                          className={order.status === 'completed' ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' : ''}
+                        <Badge
+                          variant={order.paid ? 'default' : 'secondary'}
+                          className={order.paid ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : ''}
                         >
-                          {order.status}
+                          {order.paid ? 'paid' : 'unpaid'}
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">
@@ -608,7 +625,8 @@ export function DashboardTab({ user }: DashboardTabProps) {
             ) : (
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {Object.entries(itemSales)
-                  .sort(([,a], [,b]) => b.revenue - a.revenue)
+                  // Sort by quantity sold (descending) so top-selling items appear first
+                  .sort(([,a], [,b]) => (b.qty || 0) - (a.qty || 0))
                   .map(([item, data]) => {
                     const qty = data.qty ?? 0;
                     const revenue = data.revenue ?? 0;

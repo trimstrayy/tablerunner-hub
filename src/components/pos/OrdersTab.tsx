@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Plus, Minus, Save, X, Edit3, Trash2, Settings, RefreshCw, Printer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AuthUser, MenuItem, CartItem } from '@/types/database';
-import { useMenuItems, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem, useCreateOrder, useNextOrderNumber } from '@/hooks/useSupabase';
+import { useMenuItems, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem, useCreateOrder, useNextOrderNumber, useOrders } from '@/hooks/useSupabase';
 
 // Known database categories (fallback / ordering)
 const DB_CATEGORIES = [
@@ -410,6 +410,8 @@ const handlePrint = async (e: React.MouseEvent) => {
   const updateMenuItem = useUpdateMenuItem();
   const deleteMenuItem = useDeleteMenuItem();
   const createOrder = useCreateOrder();
+  // Orders (used to compute historical sales counts so we can sort menu by quantity sold)
+  const { data: orders = [] } = useOrders(user.id);
   // Ensure we have a typed array for TypeScript and derive categories
   const menuItemsArray: MenuItem[] = (menuItems as MenuItem[]) || [];
 
@@ -459,6 +461,41 @@ const handlePrint = async (e: React.MouseEvent) => {
     const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  // Map menu_item.id -> total quantity sold (all-time). Memoized for perf.
+  const salesCountMap = useMemo(() => {
+    const m = new Map<string, number>();
+    try {
+      (orders as any[]).forEach(order => {
+        order.order_items?.forEach((oi: any) => {
+          // Support multiple shapes depending on how the DB relation was selected:
+          // - alias used: menu_item
+          // - direct relation: menu_items
+          // - fallback: item_id (raw id stored on order_item)
+          const menu = oi?.menu_item || oi?.menu_items;
+          const menuId = menu && menu.id ? String(menu.id) : (oi?.item_id ? String(oi.item_id) : null);
+          if (menuId) {
+            const prev = m.get(menuId) || 0;
+            const qty = Number(oi.quantity || 0) || 0;
+            m.set(menuId, prev + qty);
+          }
+        });
+      });
+    } catch (e) {
+      // defensive: ignore if orders shape unexpected
+    }
+    return m;
+  }, [orders]);
+
+  // Sort filtered items by quantity sold (descending). Tie-breaker: name.
+  const sortedFilteredItems = useMemo(() => {
+    return [...filteredItems].sort((a, b) => {
+      const aCount = salesCountMap.get(a.id as string) || 0;
+      const bCount = salesCountMap.get(b.id as string) || 0;
+      if (bCount !== aCount) return bCount - aCount;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }, [filteredItems, salesCountMap]);
 
   const addToOrder = (menuItem: MenuItem) => {
     setOrderItems(prev => {
@@ -835,7 +872,7 @@ const handlePrint = async (e: React.MouseEvent) => {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-2">
-                  {filteredItems.map(item => (
+                  {sortedFilteredItems.map(item => (
                     <div 
                       key={item.id} 
                       className={`relative p-3 border rounded-xl transition-all duration-200 ${
