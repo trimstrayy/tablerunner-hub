@@ -21,6 +21,8 @@ type Receipt = {
   // optional for kirana item receipts
   itemName?: string;
   itemPrice?: number;
+  // timestamp when this receipt was fully paid (ISO)
+  paidAt?: string | null;
 };
 
 type Section = {
@@ -227,8 +229,11 @@ export default function InventoryPage() {
   const [sourceFilter, setSourceFilter] = useState<Record<string, 'all' | 'firm1' | 'firm2' | 'oneoff' | 'main'>>({});
   // view mode: recent (unpaid) or paid receipts
   const [receiptView, setReceiptView] = useState<'recent' | 'paid'>('recent');
-  // date filter: all or today
-  const [dateFilter, setDateFilter] = useState<'all' | 'today'>('all');
+  // single toggle to show all past cleared records in a consolidated table
+  const [showClearedRecords, setShowClearedRecords] = useState(false);
+  // confirmDeleteTarget format: 'id|<receiptId>' or 'date|<sectionName>|<dateString>'
+  const [confirmDeleteTarget, setConfirmDeleteTarget] = useState<string | null>(null);
+  const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
   
 
   // Items and Staffs separate blocks
@@ -291,6 +296,7 @@ export default function InventoryPage() {
       rate: rate > 0 ? rate : undefined,
       itemName: itemName || undefined,
       itemPrice: itemPrice > 0 ? itemPrice : undefined,
+      paidAt: (Number(paid) >= Number(computedBill)) ? new Date().toISOString() : undefined,
     };
     setSections(prev => prev.map(sec => sec.name === activeSection ? ({ ...sec, receipts: [receipt, ...sec.receipts] }) : sec));
     setAddOpen(false); setActiveSection(null);
@@ -316,14 +322,8 @@ export default function InventoryPage() {
     return { totalBill, totalPaid, totalDue };
   };
 
-  // helper to test date filter
-  const matchesDateFilter = (isoDate: string) => {
-    if (dateFilter === 'all') return true;
-    try {
-      const d = new Date(isoDate).toDateString();
-      return d === new Date().toDateString();
-    } catch (e) { return true; }
-  };
+  // Date filtering removed — main view hides old cleared receipts automatically.
+  const matchesDateFilter = (_isoDate: string) => true;
 
   // helper: whether a receipt is considered paid
   const isPaidReceipt = (r: Receipt) => (Number(r.paidAmount || 0) >= Number(r.billAmount || 0));
@@ -360,6 +360,15 @@ export default function InventoryPage() {
     </svg>
   );
 
+  const TrashIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+      <path d="M3 6h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 6v14a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-2">
@@ -384,10 +393,66 @@ export default function InventoryPage() {
               <Button size="sm" variant={receiptView === 'paid' ? 'default' : 'outline'} onClick={() => setReceiptView('paid')}>Paid</Button>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <Button size="sm" variant={dateFilter === 'all' ? 'default' : 'outline'} onClick={() => setDateFilter('all')}>All dates</Button>
-              <Button size="sm" variant={dateFilter === 'today' ? 'default' : 'outline'} onClick={() => setDateFilter('today')}>Today</Button>
+              <Button size="sm" variant={showClearedRecords ? 'default' : 'outline'} onClick={() => setShowClearedRecords(prev => !prev)}>{showClearedRecords ? 'Hide cleared' : 'Show cleared records'}</Button>
+              <Button size="sm" variant="destructive" onClick={() => {
+                // clear all receipts data
+                setSections(DEFAULT_SECTIONS.map(s => ({ name: s, receipts: [] })));
+                try { localStorage.removeItem(STORAGE_KEYS.sections); } catch (e) {}
+                toast({ title: 'Receipts cleared', description: 'All receipts have been removed.' });
+              }}>Clear receipts</Button>
             </div>
           </div>
+
+          {/* Cleared records consolidated table - shown when user toggles Show cleared records */}
+          {showClearedRecords ? (
+            <Card className="mb-4">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Cleared receipts (all time)</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setShowClearedRecords(false)}>Close</Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-muted-foreground">
+                        <th>Date</th>
+                        <th>Section</th>
+                        <th className="text-right">Bill</th>
+                        <th className="text-right">Paid</th>
+                        <th className="text-right">Paid at</th>
+                        <th>Source</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sections.flatMap(sec => sec.receipts.map(r => ({ ...r, __section: sec.name }))).filter(r => isPaidReceipt(r)).sort((a, b) => {
+                        const ta = new Date(a.paidAt ?? a.date).getTime();
+                        const tb = new Date(b.paidAt ?? b.date).getTime();
+                        return tb - ta;
+                      }).map((r) => (
+                        <tr key={r.id} className="border-t">
+                                <td className="py-2">{new Date(r.date).toDateString()}</td>
+                                <td className="py-2">{(r as any).__section}</td>
+                                <td className="py-2 text-right">NRs {r.billAmount}</td>
+                                <td className="py-2 text-right">NRs {r.paidAmount}</td>
+                                <td className="py-2 text-right">{r.paidAt ? new Date(r.paidAt).toLocaleString() : '-'}</td>
+                                <td className="py-2">{r.source ? (r.source.type === 'one-off' ? r.source.name : r.source.name) : '—'}</td>
+                                <td className="py-2 text-right">
+                                  <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteTarget(`id|${r.id}`)}>
+                                    <TrashIcon />
+                                  </Button>
+                                </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
 
           {/* If no section is expanded, render the original two-column grid of all sections */}
           {Object.values(expandedSections).every(v => !v) ? (
@@ -443,9 +508,48 @@ export default function InventoryPage() {
                       // paid/unpaid view filter
                       if (receiptView === 'recent' && isPaidReceipt(r)) return false;
                       if (receiptView === 'paid' && !isPaidReceipt(r)) return false;
+                      // Hide fully-paid receipts older than 15 days in the main view.
+                      // Past cleared receipts are accessible via the 'Show cleared records' button.
+                      {
+                        const paidTime = r.paidAt ? new Date(r.paidAt) : new Date(r.date);
+                        try {
+                          const ageMs = Date.now() - paidTime.getTime();
+                          const fifteenDaysMs = 15 * 24 * 60 * 60 * 1000;
+                          if (isPaidReceipt(r) && ageMs > fifteenDaysMs) return false;
+                        } catch (e) {
+                          // ignore parse errors
+                        }
+                      }
                       return true;
                     });
                   const totals = filteredReceipts.reduce((acc, r) => ({ totalBill: acc.totalBill + (r.billAmount || 0), totalPaid: acc.totalPaid + (r.paidAmount || 0), totalDue: acc.totalDue + (r.dueAmount || 0) }), { totalBill: 0, totalPaid: 0, totalDue: 0 });
+                  // group receipts by date for an Excel-like daily tally and per-day "Mark paid" action
+                  const groupedByDate: Record<string, Receipt[]> = {};
+                  filteredReceipts.forEach(r => {
+                    const key = new Date(r.date).toDateString();
+                    if (!groupedByDate[key]) groupedByDate[key] = [];
+                    groupedByDate[key].push(r);
+                  });
+                  const dateKeys = Object.keys(groupedByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+                  // Mark all visible receipts for this section as paid
+                  const markPaidForAllVisible = () => {
+                    const nowIso = new Date().toISOString();
+                    // filteredReceipts contains the visible receipts for this section under current filters
+                    const visibleIds = new Set(filteredReceipts.map(r => r.id));
+                    setSections(prev => prev.map(sec => {
+                      if (sec.name !== section.name) return sec;
+                      return {
+                        ...sec,
+                        receipts: sec.receipts.map(r => {
+                          if (!visibleIds.has(r.id)) return r;
+                          return { ...r, paidAmount: r.billAmount, dueAmount: 0, paidAt: nowIso };
+                        })
+                      };
+                    }));
+                    toast({ title: 'Marked paid', description: `All visible receipts for ${section.name} marked paid.` });
+                  };
+
                   return (
                     <div key={section.name} className="border rounded-lg p-3 cursor-pointer" role="button" onClick={() => toggleSection(section.name)} aria-pressed={!!expandedSections[section.name]}>
                       <div className="flex items-start justify-between mb-2">
@@ -466,6 +570,8 @@ export default function InventoryPage() {
                         </Button>
                       </div>
 
+                          {/* removed the 15-day dairy summary; using per-day aggregates below instead */}
+
                       {/* Source filter controls (per-section) */}
                       <div className="flex items-center gap-2 mb-3">
                         {((section.name === 'Dairy') ? ['all', 'firm1', 'firm2', 'oneoff'] : ['all', 'main', 'oneoff']).map(key => {
@@ -484,77 +590,104 @@ export default function InventoryPage() {
                                   <thead>
                                     <tr className="text-left text-xs text-muted-foreground">
                                       <th>Date</th>
-                                      <th>Bill</th>
-                                      {/* decide which supplier columns to show based on section */}
-                                      {(() => {
-                                        const showFirm1 = section.name === 'Dairy' && (filterKey === 'all' || filterKey === 'firm1');
-                                        const showFirm2 = section.name === 'Dairy' && (filterKey === 'all' || filterKey === 'firm2');
-                                        const showMain = section.name !== 'Dairy' && (filterKey === 'all' || filterKey === 'main');
-                                        const showOneOff = (filterKey === 'all' || filterKey === 'oneoff');
-                                        return (
-                                          <>
-                                            {showFirm1 && <th className="text-center">Mama</th>}
-                                            {showFirm2 && <th className="text-center">Bhim uncle</th>}
-                                            {showMain && <th className="text-center">Main</th>}
-                                            {showOneOff && <th className="text-center">One-off</th>}
-                                          </>
-                                        );
-                                      })()}
-                                      <th>Paid</th>
-                                      <th>Due</th>
+                                      {section.name === 'Dairy' ? (
+                                        <>
+                                          <th className="text-right">Ltrs</th>
+                                          <th className="text-right">Rate</th>
+                                        </>
+                                      ) : null}
+                                      <th className="text-right">Bill</th>
+                                      <th className="text-right">Paid</th>
+                                      <th className="text-right">Due</th>
+                                      <th />
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {filteredReceipts.map(r => (
-                                      <tr key={r.id} className="border-t">
-                                        <td className="py-2">{new Date(r.date).toLocaleDateString()}</td>
-                                        <td className="py-2">NRs {r.billAmount}</td>
-                                        {(() => {
-                                          const showFirm1 = section.name === 'Dairy' && (filterKey === 'all' || filterKey === 'firm1');
-                                          const showFirm2 = section.name === 'Dairy' && (filterKey === 'all' || filterKey === 'firm2');
-                                          const showMain = section.name !== 'Dairy' && (filterKey === 'all' || filterKey === 'main');
-                                          const showOneOff = (filterKey === 'all' || filterKey === 'oneoff');
-                                          return (
+                                    {dateKeys.map(dateKey => {
+                                      const dayReceipts = groupedByDate[dateKey];
+                                      const dayTotals = dayReceipts.reduce((s, rr) => ({ totalBill: s.totalBill + (rr.billAmount || 0), totalPaid: s.totalPaid + (rr.paidAmount || 0), totalDue: s.totalDue + (rr.dueAmount || 0) }), { totalBill: 0, totalPaid: 0, totalDue: 0 });
+                                      // compute dairy-specific aggregates when needed
+                                      const dayLitres = dayReceipts.reduce((s, rr) => s + (Number(rr.quantity || 0)), 0);
+                                      const avgRate = dayLitres > 0 ? (dayTotals.totalBill / dayLitres) : undefined;
+                                      return (
+                                        <tr key={dateKey} className="border-t">
+                                          <td className="py-2">
+                                            <div className="flex items-center justify-between">
+                                              <div>
+                                                <div>{dateKey}</div>
+                                                {section.name === 'Dairy' ? (
+                                                  <div className="text-xs text-muted-foreground">{dayLitres} Ltrs • Rate: {avgRate ? `NRs ${avgRate.toFixed(2)}` : '—'}</div>
+                                                ) : null}
+                                              </div>
+                                              <div>
+                                                {section.name === 'Dairy' ? null : (
+                                                  <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setExpandedDates(prev => ({ ...prev, [dateKey]: !prev[dateKey] })); }}>{expandedDates[dateKey] ? 'Hide' : 'Details'}</Button>
+                                                )}
+                                              </div>
+                                            </div>
+                                          </td>
+                                          {section.name === 'Dairy' ? (
                                             <>
-                                              {showFirm1 && (
-                                                <td className="py-2 text-center">{r.source && r.source.type === 'firm' && r.source.name === 'Mama' ? `NRs ${r.billAmount}` : '-'}</td>
-                                              )}
-                                              {showFirm2 && (
-                                                <td className="py-2 text-center">{r.source && r.source.type === 'firm' && r.source.name === 'Bhim uncle' ? `NRs ${r.billAmount}` : '-'}</td>
-                                              )}
-                                              {showMain && (
-                                                <td className="py-2 text-center">{r.source && r.source.type === 'firm' && r.source.name === 'Main' ? `NRs ${r.billAmount}` : '-'}</td>
-                                              )}
-                                              {showOneOff && (
-                                                <td className="py-2 text-center">{r.source && r.source.type === 'one-off' ? `NRs ${r.billAmount}` : '-'}</td>
-                                              )}
+                                              <td className="py-2 text-right">{dayLitres}</td>
+                                              <td className="py-2 text-right">{avgRate ? `NRs ${avgRate.toFixed(2)}` : '—'}</td>
                                             </>
-                                          );
-                                        })()}
-                                        <td className="py-2">
-                                          <div>NRs {r.paidAmount}</div>
-                                          {r.unit && r.quantity ? (
-                                            <div className="text-xs text-muted-foreground">{r.quantity} {r.unit} @ NRs {r.rate}</div>
-                                          ) : r.itemName ? (
-                                            <div className="text-xs text-muted-foreground">{r.itemName} @ NRs {r.itemPrice}</div>
                                           ) : null}
-                                        </td>
-                                        <td className="py-2">NRs {r.dueAmount}</td>
-                                        <td className="py-2 text-right">
-                                          {!isPaidReceipt(r) ? (
-                                            <Button size="sm" onClick={(e) => { e.stopPropagation();
-                                              // mark this receipt as paid
-                                              setSections(prev => prev.map(sec => sec.name === section.name ? ({ ...sec, receipts: sec.receipts.map(rr => rr.id === r.id ? ({ ...rr, paidAmount: rr.billAmount, dueAmount: 0 }) : rr) }) : sec));
-                                            }}>Mark paid</Button>
-                                          ) : (
-                                            <div className="text-xs text-muted-foreground">Paid</div>
-                                          )}
-                                        </td>
-                                      </tr>
-                                    ))}
+                                          <td className="py-2 text-right">NRs {dayTotals.totalBill}</td>
+                                          <td className="py-2 text-right">NRs {dayTotals.totalPaid}</td>
+                                          <td className="py-2 text-right">NRs {dayTotals.totalDue}</td>
+                                          <td className="py-2 text-right">
+                                            {/* Per-day buttons removed — single footer "Mark paid" will mark all visible receipts */}
+                                            {dayTotals.totalDue > 0 ? null : (
+                                              <div className="text-xs text-muted-foreground">Cleared</div>
+                                            )}
+                                          </td>
+                                          <td className="py-2 text-right">
+                                            <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setConfirmDeleteTarget(`date|${section.name}|${dateKey}`); }} aria-label={`Delete all receipts for ${dateKey}`}>
+                                              <TrashIcon />
+                                            </Button>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                    {/* footer totals */}
+                                    <tr className="border-t font-semibold">
+                                      <td className="py-2">Total</td>
+                                      <td className="py-2 text-right">NRs {totals.totalBill}</td>
+                                      <td className="py-2 text-right">NRs {totals.totalPaid}</td>
+                                      <td className="py-2 text-right">NRs {totals.totalDue}</td>
+                                      <td className="py-2 text-right">
+                                        {totals.totalDue > 0 ? (
+                                          <Button size="sm" onClick={(e) => { e.stopPropagation(); markPaidForAllVisible(); }}>Mark paid</Button>
+                                        ) : (
+                                          <div className="text-xs text-muted-foreground">All cleared</div>
+                                        )}
+                                      </td>
+                                    </tr>
                                   </tbody>
                                 </table>
                               </div>
+                              {/* Render per-date details (individual receipts) below the table for expanded dates */}
+                              {dateKeys.map(dateKey => {
+                                if (!expandedDates[dateKey]) return null;
+                                const receipts = groupedByDate[dateKey];
+                                return (
+                                  <div key={`details-${dateKey}`} className="mt-2 border rounded p-2 bg-muted/5">
+                                    {receipts.map(r => (
+                                      <div key={r.id} className="flex items-center justify-between py-1 border-b last:border-b-0">
+                                        <div>
+                                          <div className="font-medium">{r.itemName ?? r.source?.name ?? (r.unit ? `${r.quantity} ${r.unit}` : 'Receipt')}</div>
+                                          <div className="text-xs text-muted-foreground">NRs {r.billAmount} • Paid: NRs {r.paidAmount} • Due: NRs {r.dueAmount}</div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <Button size="sm" variant="destructive" onClick={() => setConfirmDeleteTarget(`id|${r.id}`)}>
+                                            <TrashIcon />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })}
                     </div>
                   );
                 })}
@@ -661,20 +794,27 @@ export default function InventoryPage() {
                               <div className={`mt-1 font-semibold ${remaining < 0 ? 'text-rose-600' : ''}`}>Remaining: NRs {remaining}</div>
                             </div>
                             <div>
-                                  <Button size="sm" variant={s.paidThisMonth ? 'outline' : 'default'} onClick={(e) => {
-                                    e.stopPropagation();
-                                    setStaffs(prev => prev.map(p => {
-                                      if (p.id !== s.id) return p;
-                                      const base = p.salary - (p.advance + p.reduced);
-                                      if (p.paidThisMonth) {
-                                        // unmark paid
-                                        return { ...p, paidThisMonth: false, paidThisMonthAmount: 0 };
-                                      }
-                                      // mark paid -> record paid amount equal to remaining at this moment
-                                      const amt = Math.max(0, base);
-                                      return { ...p, paidThisMonth: true, paidThisMonthAmount: amt };
-                                    }));
-                                  }}>{s.paidThisMonth ? 'Paid' : 'Mark paid'}</Button>
+                                  {s.paidThisMonth ? (
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-sm font-medium">Next salary: NRs {s.salary.toLocaleString()}</div>
+                                      <Button size="sm" variant="outline" onClick={(e) => {
+                                        e.stopPropagation();
+                                        // undo paid mark for this month
+                                        setStaffs(prev => prev.map(p => p.id === s.id ? ({ ...p, paidThisMonth: false, paidThisMonthAmount: 0 }) : p));
+                                      }}>Undo</Button>
+                                    </div>
+                                  ) : (
+                                    <Button size="sm" variant="default" onClick={(e) => {
+                                      e.stopPropagation();
+                                      setStaffs(prev => prev.map(p => {
+                                        if (p.id !== s.id) return p;
+                                        const base = p.salary - (p.advance + p.reduced);
+                                        // mark paid -> record paid amount equal to remaining at this moment
+                                        const amt = Math.max(0, base);
+                                        return { ...p, paidThisMonth: true, paidThisMonthAmount: amt };
+                                      }));
+                                    }}>Mark paid</Button>
+                                  )}
                             </div>
                           </div>
                         </div>
@@ -717,6 +857,43 @@ export default function InventoryPage() {
       ) : null}
 
       <AddReceiptModal open={addOpen} section={activeSection} onClose={() => setAddOpen(false)} onSave={handleAddReceipt} />
+
+      {/* Delete confirmation modal for receipts (single id or date bulk) */}
+      {confirmDeleteTarget ? (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Delete</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="text-sm">Are you sure you want to delete the selected record(s)? This action cannot be undone.</div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setConfirmDeleteTarget(null)}>Cancel</Button>
+                  <Button variant="destructive" className="flex-1" onClick={() => {
+                    const target = confirmDeleteTarget;
+                    if (!target) return;
+                    if (target.startsWith('id|')) {
+                      const idToDelete = target.split('|')[1];
+                      setSections(prev => prev.map(sec => ({ ...sec, receipts: sec.receipts.filter(r => r.id !== idToDelete) })));
+                    } else if (target.startsWith('date|')) {
+                      const parts = target.split('|');
+                      const sectionName = parts[1];
+                      const dateKey = parts[2];
+                      setSections(prev => prev.map(sec => {
+                        if (sec.name !== sectionName) return sec;
+                        return { ...sec, receipts: sec.receipts.filter(r => new Date(r.date).toDateString() !== dateKey) };
+                      }));
+                    }
+                    setConfirmDeleteTarget(null);
+                    toast({ title: 'Deleted', description: 'Record(s) removed.' });
+                  }}>Delete</Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       {/* Items block */}
       

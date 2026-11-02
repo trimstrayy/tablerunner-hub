@@ -1,0 +1,191 @@
+Table Runner Hub — Slide Deck (plain-text template)
+
+Typography & page layout guidance (use when converting to slides or PDF):
+
+- Recommended page size: A4 landscape (297mm × 210mm) or 11" × 8.5" (Letter landscape).
+- Title font: Inter Black / Roboto Slab Bold, 44–56 pt for slide title.
+- Body font: Inter / Roboto, 16–20 pt for body text, 22–28 pt for subheads.
+- Margins: 24 mm (0.95 in) all around. Keep safe area inside these margins.
+- Line height: 1.3–1.5 for body copy. Use left alignment for paragraphs.
+- Export: SVG for diagrams, PNG at 300 DPI for raster export, PDF for final deck.
+
+Notes: a plain-text slide deck cannot enforce fonts — use the typography guidance above when you import into PowerPoint/Google Slides/Keynote or when generating PDFs.
+
+---
+
+Slide 1: Title Slide
+
+TABLE RUNNER HUB
+Restaurant POS & Billing System
+
+[PLACEHOLDER IMAGE — Full-width, centered]
+
+Prepared By: <Your Name>
+Date: <Date>
+
+Layout notes: Title centered, large; subtitle smaller beneath title; image fills top half of slide with 24 mm margins.
+
+---
+
+Slide 2: Abstract
+
+ABSTRACT
+
+[Left-aligned paragraph — medium margin]
+
+Write your abstract here in 5–7 short lines. Focus on the value proposition: fast ordering, printable receipts, simple inventory intake.
+
+Layout notes: Left column text, small decorative icon on the right if desired.
+
+---
+
+Slide 3: Introduction
+
+INTRODUCTION
+
+Purpose: Explain why Table Runner Hub exists and the main problems it solves (order speed, reliable printing, supplier billing).
+
+[Right-side Image Placeholder — small]
+
+Layout notes: Text left, small image on the right; maintain margins.
+
+---
+
+Slide 4: Objectives
+
+OBJECTIVES
+
+• Automate order handling
+• Simplify billing
+• Track sales & reports
+• Reduce human error
+
+[Small icon placeholders aligned horizontally beneath bullets]
+
+Layout notes: Two-column layout possible — bullets left, icons right.
+
+---
+
+Slide 5: System Architecture
+
+SYSTEM ARCHITECTURE
+
+[Large image placeholder — Architecture Diagram (see recommended diagram: Browser (React/Vite) → Supabase (Orders/Menu) & localStorage (Inventory) → Thermal Printer via hidden iframe)]
+
+Caption (small): Orders & menu persisted to Supabase; receipts stored locally unless server persistence enabled; printing via hidden iframe to 78mm thermal printers.
+
+Layout notes: Full-bleed diagram area with 24 mm margins; caption beneath.
+
+---
+
+Slide 6: Modules
+
+SYSTEM MODULES
+
+• Order Management
+• Billing Engine
+• Menu Management
+• Reports & Analytics
+• User Roles & Permissions
+
+[Horizontal icons placeholder]
+
+Layout notes: Use icons above each module name and short 1-line descriptions if needed.
+
+---
+
+Slide 7: Database Design
+
+DATABASE DESIGN (ER DIAGRAM)
+
+[Large ER Diagram Placeholder — show core tables: menu_items, orders, order_items, receipts, staff]
+
+Small note: Receipts mapping: section, date, bill_amount, paid_amount, due_amount, source, quantity, rate, item_name, paid_at.
+
+Layout notes: ER occupies majority of slide, with legend on the right.
+
+---
+
+Slide 8: Data Flow Diagram
+
+DATA FLOW DIAGRAM (DFD)
+
+Level 0: Browser ↔ Supabase (Orders/Menu) ↔ Reports
+
+Level 1: POS (Take Order → Save → Print), Inventory (Add Receipt → Local Store → Mark Paid), Analytics (Compute sales counts)
+
+[Diagram placeholder — Level 0 and Level 1 sketches]
+
+Layout notes: Top-level DFD on top half, Level 1 expanded on bottom half.
+
+---
+
+Slide 9: Implementation
+
+IMPLEMENTATION
+
+Tech stack (short): React + TypeScript + Vite; Tailwind-like UI primitives; Supabase (Postgres) for orders & menu; localStorage for quick inventory receipts; printing via hidden iframe optimized for 78mm thermal.
+
+[Code block placeholder — small code snippet showing createOrder or print helper]
+[UI screenshot placeholder]
+
+Layout notes: Left column code + right column screenshot.
+
+---
+
+Slide 10: Testing
+
+TESTING
+
+• Unit testing (core utils)  — Jest/React Testing Library
+• Integration testing (orders + persistence)
+• UAT (shop staff acceptance)
+
+[Test case table placeholder: test id | description | expected result | pass/fail]
+
+Layout notes: Table centered with concise rows.
+
+---
+
+Slide 11: Conclusion
+
+CONCLUSION
+
+Summarize benefits: Faster order flow, reliable receipts, consolidated supplier billing, analytics-ready orders.
+
+Call to action: Deploy to POS stations; train staff with the 3-step POS quick card (Take Order → Accept Payment → Print Receipt).
+
+Layout notes: Emphasize key lines with bold or color.
+
+---
+
+Slide 12: Thank You
+
+THANK YOU
+
+Questions?
+
+[Footer placeholder: contact info, repo link, version]
+
+Layout notes: Large thank-you text centered; small contact info footer.
+
+---
+
+Image & asset filenames (suggested) — place these in the repo before export:
+- assets/slide_images/title_image.png
+- assets/slide_images/architecture.svg
+- assets/slide_images/er_diagram.svg
+- assets/slide_images/pos_screenshot.png
+- assets/icons/menu.svg, icons/payment.svg, icons/cloud.svg, icons/printer.svg
+
+Export tips
+- When converting text to slides: import this file as a guide and drop content per slide into your slide tool.
+- Use the typography guidance on top for consistent fonts & sizes. If you don't have Inter or Roboto, use system sans-serif (Arial) as fallback.
+- When exporting PDF for printing, set PDF output to A4 landscape and embed fonts.
+
+Next steps I can take for you
+- Convert this plain-text deck into a PDF (styled) and add to the repo — tell me preferred font (Inter or Roboto) and whether to use colored or flat style.
+- Produce SVG diagrams (architecture + ER) and add them to `assets/slide_images/`.
+- Generate a one-page printable POS quick-start poster (A4) from Slide 1 and POS flow.
+
+

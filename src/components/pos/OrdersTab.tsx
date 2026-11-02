@@ -1227,6 +1227,63 @@ const handlePrint = async (e: React.MouseEvent) => {
                     </span>
                     <span>{createOrder.isPending ? 'Saving' : 'Save'}</span>
                   </Button>
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      // Mark paid and close: save order with paid=true and paid_amount=total, then clear UI
+                      if (orderItems.length === 0) {
+                        toast({ title: 'No items', description: 'Add items before marking paid.', variant: 'destructive' });
+                        return;
+                      }
+
+                      try {
+                        const orderData = {
+                          order_number: nextOrderNumber,
+                          owner_id: user.id,
+                          subtotal,
+                          discount: discountAmount,
+                          total,
+                          paid: true,
+                          paid_amount: Math.max(0, total),
+                          customer_name: customerName || null,
+                          table_group: tableGroup || null,
+                          table_number: tableNumber || null,
+                          payment_method: paymentMethod,
+                          closed: true,
+                        } as any;
+
+                        const orderItemsData = orderItems.map(item => ({
+                          item_id: item.id && item.id.toString().startsWith('oneoff-') ? null : item.id,
+                          name: item.id && item.id.toString().startsWith('oneoff-') ? item.name : undefined,
+                          quantity: item.quantity,
+                          price: item.unitPrice,
+                          total: item.total,
+                        }));
+
+                        await createOrder.mutateAsync({ order: orderData, orderItems: orderItemsData });
+
+                        // Clear the order UI so the table is ready for new entries
+                        setOrderItems([]);
+                        setDiscount(0);
+                        setDiscountType('fixed');
+                        setCustomerName('');
+                        setTableGroup(null);
+                        setTableNumber(null);
+                        setPaid(false);
+                        setPaidAmount(0);
+
+                        toast({ title: 'Marked paid', description: `Order #${orderData.order_number} marked paid and closed.` });
+                      } catch (err) {
+                        console.error('Error marking paid:', err);
+                        toast({ title: 'Error', description: 'Could not mark order paid.', variant: 'destructive' });
+                      }
+                    }}
+                    className="group flex-1 min-w-0 bg-green-600 hover:bg-green-700 text-white"
+                    size="sm"
+                    disabled={createOrder.isPending || orderItems.length === 0}
+                  >
+                    <span>Mark paid & Close</span>
+                  </Button>
                 </div>
               </div>
             </>
