@@ -12,10 +12,14 @@ export type OrderUpdate = Database['public']['Tables']['orders']['Update'];
 export type OrderItem = Database['public']['Tables']['order_items']['Row'];
 export type OrderItemInsert = Database['public']['Tables']['order_items']['Insert'];
 export type OrderItemUpdate = Database['public']['Tables']['order_items']['Update'];
+export type OrderPayment = Database['public']['Tables']['order_payments']['Row'];
+export type OrderPaymentInsert = Database['public']['Tables']['order_payments']['Insert'];
 
 export type MenuItem = Database['public']['Tables']['menu_items']['Row'];
 export type MenuItemInsert = Database['public']['Tables']['menu_items']['Insert'];
 export type MenuItemUpdate = Database['public']['Tables']['menu_items']['Update'];
+export type MenuCategory = Database['public']['Tables']['menu_categories']['Row'];
+export type MenuCategoryInsert = Database['public']['Tables']['menu_categories']['Insert'];
 
 // Extended types for frontend use
 export type UserRole = 'admin' | 'owner';

@@ -5,9 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { OrdersTab } from '@/components/pos/OrdersTab';
+import { CurrentTabs } from '@/components/pos/CurrentTabs';
 import { DashboardTab } from '@/components/dashboard/DashboardTab';
 import InventoryPage from '@/pages/Inventory';
-import { Building2, LogOut, ShoppingCart, BarChart3, User } from 'lucide-react';
+import { Building2, LogOut, ShoppingCart, BarChart3, User, ClipboardList } from 'lucide-react';
 import { AuthUser } from '@/types/database';
 import { ThemeToggle } from '@/components/theme-toggle';
 
@@ -18,6 +19,14 @@ interface MainLayoutProps {
 
 export function MainLayout({ user, onLogout }: MainLayoutProps) {
   const [activeTab, setActiveTab] = useState('orders');
+  const [activeTabOrder, setActiveTabOrder] = useState<any | null>(null);
+
+  const handleTabChange = (nextTab: string) => {
+    if (nextTab === 'orders' && activeTab !== 'current-tabs') {
+      setActiveTabOrder(null);
+    }
+    setActiveTab(nextTab);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-accent/5">
@@ -76,8 +85,8 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
 
       {/* Main Content */}
       <div className="container mx-auto p-4 md:p-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 max-w-md mx-auto bg-card shadow-card h-auto md:h-10">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 max-w-2xl mx-auto bg-card shadow-card h-auto md:h-10">
             <TabsTrigger 
               value="orders" 
               className="flex items-center justify-center space-x-2 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -85,6 +94,14 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
               <ShoppingCart className="w-4 h-4" />
               <span className="hidden sm:inline">POS</span>
               <span className="sm:hidden">Orders</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="current-tabs"
+              className="flex items-center justify-center space-x-2 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <ClipboardList className="w-4 h-4" />
+              <span className="hidden sm:inline">Current Tabs</span>
+              <span className="sm:hidden">Tabs</span>
             </TabsTrigger>
             <TabsTrigger 
               value="dashboard" 
@@ -103,7 +120,21 @@ export function MainLayout({ user, onLogout }: MainLayoutProps) {
           </TabsList>
 
           <TabsContent value="orders" className="space-y-0">
-            <OrdersTab user={user} />
+            <OrdersTab
+              user={user}
+              activeTabOrder={activeTabOrder}
+              onTabSessionComplete={() => setActiveTabOrder(null)}
+            />
+          </TabsContent>
+
+          <TabsContent value="current-tabs" className="space-y-0">
+            <CurrentTabs
+              user={user}
+              onOpenPos={(order) => {
+                setActiveTabOrder(order);
+                setActiveTab('orders');
+              }}
+            />
           </TabsContent>
 
           <TabsContent value="dashboard" className="space-y-0">

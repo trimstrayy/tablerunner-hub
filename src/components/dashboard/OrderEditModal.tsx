@@ -235,41 +235,34 @@ export default function OrderEditModal({ open, onClose, orderRow, ownerId }: Ord
               <div className="mb-3">
                 <Label className="text-xs">Customer name (optional)</Label>
                 <Input value={customerName ?? ''} onChange={(e) => setCustomerName(e.target.value || null)} className="text-sm" />
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="flex-1">
-                    <Label className="text-xs">Table group</Label>
-                    <Select value={tableGroup ?? ''} onValueChange={(v) => { setTableGroup(v || null); setTableNumber(null); }}>
-                      <SelectTrigger className="text-sm"><SelectValue placeholder="None" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="A">A</SelectItem>
-                        <SelectItem value="B">B</SelectItem>
-                        <SelectItem value="C">C</SelectItem>
-                        <SelectItem value="D">D</SelectItem>
-                        <SelectItem value="T">T</SelectItem>
-                        <SelectItem value="G">G</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="w-28">
-                    <Label className="text-xs">Table #</Label>
-                    <Select value={tableNumber ?? ''} onValueChange={(v) => setTableNumber(v || null)}>
-                      <SelectTrigger className="text-sm"><SelectValue placeholder="-" /></SelectTrigger>
-                      <SelectContent>
-                        {(() => {
-                          if (!tableGroup) return null;
-                          if (tableGroup === 'T') return ['T0', 'T1', 'T2', 'T3'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>);
-                          if (tableGroup === 'G') return ['G0', 'G1', 'G2'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>);
-                          if (['A', 'B', 'C'].includes(tableGroup)) return Array.from({ length: 8 }, (_, i) => `${tableGroup}${i+1}`).map(t => (
-                            <SelectItem key={t} value={t}>{t}</SelectItem>
-                          ));
-                          if (tableGroup === 'D') return Array.from({ length: 2 }, (_, i) => `${tableGroup}${i+1}`).map(t => (
-                            <SelectItem key={t} value={t}>{t}</SelectItem>
-                          ));
-                          return null;
-                        })()}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="mt-2 space-y-2">
+                  <Label className="text-xs">Seating area</Label>
+                  <Select value={tableGroup ?? ''} onValueChange={(v) => { setTableGroup(v || null); setTableNumber(null); }}>
+                    <SelectTrigger className="text-sm"><SelectValue placeholder="No table selected" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cabin">Cabin</SelectItem>
+                      <SelectItem value="Outside">Outside</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {tableGroup && (
+                    <div className="grid grid-cols-5 gap-1.5" aria-label={`${tableGroup} tables`}>
+                      {Array.from({ length: tableGroup === 'Cabin' ? 9 : 4 }, (_, index) => {
+                        const number = String(index + 1);
+                        const selected = tableNumber === number;
+                        return (
+                          <button
+                            key={number}
+                            type="button"
+                            onClick={() => setTableNumber(selected ? null : number)}
+                            className={`h-8 rounded-md border text-xs font-medium transition-colors ${selected ? 'border-primary bg-primary text-primary-foreground' : 'hover:border-primary hover:bg-primary/10'}`}
+                            aria-pressed={selected}
+                          >
+                            {number}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 <div className="mt-2">
                   <Label className="text-xs">Payment method</Label>

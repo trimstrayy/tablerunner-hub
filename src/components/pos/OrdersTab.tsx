@@ -6,10 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, Minus, Save, X, Edit3, Trash2, Settings, RefreshCw, Printer } from 'lucide-react';
+import { Search, Plus, Minus, Save, X, Edit3, Trash2, Settings, RefreshCw, Printer, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AuthUser, MenuItem, CartItem } from '@/types/database';
-import { useMenuItems, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem, useCreateOrder, useNextOrderNumber, useOrders } from '@/hooks/useSupabase';
+import { useMenuItems, useMenuCategories, useCreateMenuCategory, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem, useCreateOrder, useUpdateOrder, useNextOrderNumber, useOrders } from '@/hooks/useSupabase';
 
 // Known database categories (fallback / ordering)
 const DB_CATEGORIES = [
@@ -33,11 +33,25 @@ const categoryDisplayMap: Record<string, string> = {
   'Momo': 'Momo',
 };
 
+const TABLE_AREAS = [
+  { value: 'Cabin', label: 'Cabin', tables: 9 },
+  { value: 'Outside', label: 'Outside', tables: 4 },
+] as const;
+
 interface OrdersTabProps {
   user: AuthUser;
+  activeTabOrder?: any | null;
+  onTabSessionComplete?: () => void;
 }
 
-export function OrdersTab({ user }: OrdersTabProps) {
+const escapeReceiptText = (value: string | number | null | undefined) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
+
+export function OrdersTab({ user, activeTabOrder, onTabSessionComplete }: OrdersTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [orderItems, setOrderItems] = useState<CartItem[]>([]);
@@ -55,6 +69,8 @@ export function OrdersTab({ user }: OrdersTabProps) {
   const [isEditingMenu, setIsEditingMenu] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [isAddingItem, setIsAddingItem] = useState(false);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [categoryName, setCategoryName] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     // default to a valid DB category
@@ -67,15 +83,12 @@ export function OrdersTab({ user }: OrdersTabProps) {
    function printPage() {
         window.print();
         }
-        const COMPANY_INFO = {
-          name: 'ठुल्दाईको चिया चौतारी  ',
-          address: '28 Kilo, Dhulikhel',
-          phone: '9768768326',
-          pan: '100717802'
-        };
-
 const generateReceipt = (printedOrderNumber?: number | string) => {
   const receiptNumberToShow = printedOrderNumber ?? nextOrderNumber;
+  const shopName = user.hotel_name?.trim() || 'Restaurant POS';
+  const shopLocation = user.hotel_location?.trim();
+  const shopPhone = user.contact_no?.trim();
+  const shopEmail = user.email?.trim();
   const receiptHTML = `
     <html>
       <head>
@@ -212,19 +225,19 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
         <div class="receipt">
           <!-- Header -->
           <div class="receipt-header">
-            <h1>${COMPANY_INFO.name}</h1>
-            <p>${COMPANY_INFO.address}</p>
-            <p>${COMPANY_INFO.phone}</p>
-            <p>PAN: ${COMPANY_INFO.pan}</p>
+            <h1>${escapeReceiptText(shopName)}</h1>
+            ${shopLocation ? `<p>${escapeReceiptText(shopLocation)}</p>` : ''}
+            ${shopPhone ? `<p>Contact: ${escapeReceiptText(shopPhone)}</p>` : ''}
+            ${shopEmail ? `<p>${escapeReceiptText(shopEmail)}</p>` : ''}
           </div>
 
           <!-- Order Info -->
           <div class="order-details">
-            <p><strong>Order #${nextOrderNumber}</strong></p>
+            <p><strong>Order #${escapeReceiptText(receiptNumberToShow)}</strong></p>
             <p>Date: ${new Date().toLocaleDateString()}</p>
             <p>Time: ${new Date().toLocaleTimeString()}</p>
-            ${customerName ? `<p>Customer: ${customerName}</p>` : ''}
-            ${tableNumber ? `<p>Table: ${tableNumber}</p>` : ''}
+            ${customerName ? `<p>Customer: ${escapeReceiptText(customerName)}</p>` : ''}
+            ${tableNumber ? `<p>Table: ${escapeReceiptText(tableGroup ? `${tableGroup} ${tableNumber}` : tableNumber)}</p>` : ''}
             ${paymentMethod ? `<p>Payment: ${paymentMethod === 'cash' ? 'Cash' : 'Online'}</p>` : ''}
           </div>
 
@@ -238,7 +251,7 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
           
           ${orderItems.map(item => `
             <div class="item-row">
-              <div class="item-name">${item.name}</div>
+              <div class="item-name">${escapeReceiptText(item.name)}</div>
               <div class="item-qty">${item.quantity}</div>
               <div class="item-price">NRs ${item.unitPrice}</div>
               <div class="item-total">NRs ${item.total}</div>
@@ -264,7 +277,7 @@ const generateReceipt = (printedOrderNumber?: number | string) => {
           </div>
 
           <div class="footer">
-            <p> म अनि मेरो चिया!</p>
+            <p>Thank you</p>
           </div>
         </div>
       </body>
@@ -365,7 +378,7 @@ const handlePrint = async (e: React.MouseEvent) => {
   try {
     // build payload for save (same structure as handleSaveOrder)
     const orderData = {
-      order_number: nextOrderNumber,
+      order_number: activeTabOrder?.order_number ?? nextOrderNumber,
       owner_id: user.id,
       subtotal,
       discount: discountType === 'percentage' ? (subtotal * discount / 100) : discount,
@@ -373,6 +386,7 @@ const handlePrint = async (e: React.MouseEvent) => {
       customer_name: customerName || null,
       table_group: tableGroup || null,
       table_number: tableNumber || null,
+      closed: false,
     } as any;
 
     const orderItemsData = orderItems.map(item => ({
@@ -384,7 +398,16 @@ const handlePrint = async (e: React.MouseEvent) => {
     }));
 
     // save order first
-    const saved = await createOrder.mutateAsync({ order: orderData, orderItems: orderItemsData });
+    let saved: any;
+    if (activeTabOrder) {
+      saved = await updateOrder.mutateAsync({
+        orderId: activeTabOrder.id,
+        updates: orderData,
+        orderItems: orderItemsData,
+      });
+    } else {
+      saved = await createOrder.mutateAsync({ order: orderData, orderItems: orderItemsData });
+    }
 
     // once saved, open receipt with server-assigned order number
     generateReceipt(saved?.order_number ?? nextOrderNumber);
@@ -396,6 +419,7 @@ const handlePrint = async (e: React.MouseEvent) => {
     setCustomerName('');
     setTableGroup(null);
     setTableNumber(null);
+    onTabSessionComplete?.();
   } catch (err) {
     console.error('Error saving or printing order:', err);
     toast({ title: 'Error', description: 'Could not save or print the order.', variant: 'destructive' });
@@ -405,21 +429,48 @@ const handlePrint = async (e: React.MouseEvent) => {
 
   // Supabase hooks
   const { data: menuItems = [], isLoading: isLoadingMenu, refetch: refetchMenu } = useMenuItems(user.id);
+  const { data: menuCategories = [], refetch: refetchCategories } = useMenuCategories(user.id);
   const { data: nextOrderNumber = 1 } = useNextOrderNumber(user.id);
+  const createMenuCategory = useCreateMenuCategory();
   const createMenuItem = useCreateMenuItem();
   const updateMenuItem = useUpdateMenuItem();
   const deleteMenuItem = useDeleteMenuItem();
   const createOrder = useCreateOrder();
+  const updateOrder = useUpdateOrder();
   // Orders (used to compute historical sales counts so we can sort menu by quantity sold)
   const { data: orders = [] } = useOrders(user.id);
   // Ensure we have a typed array for TypeScript and derive categories
   const menuItemsArray: MenuItem[] = (menuItems as MenuItem[]) || [];
 
-  const dbCategories: string[] = menuItemsArray.length > 0
-    ? Array.from(new Set(menuItemsArray.map((item: MenuItem) => item.category)))
-    : DB_CATEGORIES;
+  const dbCategories: string[] = Array.from(new Set([
+    ...menuCategories.map(category => category.name),
+    ...menuItemsArray.map((item: MenuItem) => item.category),
+    ...(menuCategories.length === 0 && menuItemsArray.length === 0 ? DB_CATEGORIES : []),
+  ]));
 
   const sidebarCategories: string[] = ['All', ...dbCategories];
+
+  useEffect(() => {
+    if (!activeTabOrder) return;
+
+    const restoredItems: CartItem[] = (activeTabOrder.order_items || []).map((item: any, index: number) => ({
+      id: item.item_id || item.menu_items?.id || `oneoff-${activeTabOrder.id}-${index}`,
+      name: item.menu_items?.name || item.name || 'Unnamed item',
+      quantity: Number(item.quantity || 1),
+      unitPrice: Number(item.price || 0),
+      total: Number(item.total || 0),
+    }));
+
+    setOrderItems(restoredItems);
+    setCustomerName(activeTabOrder.customer_name || '');
+    setTableGroup(activeTabOrder.table_group || null);
+    setTableNumber(activeTabOrder.table_number || null);
+    setPaid(Boolean(activeTabOrder.paid));
+    setPaidAmount(Number(activeTabOrder.paid_amount || 0));
+    setDiscount(Number(activeTabOrder.discount || 0));
+    setDiscountType('fixed');
+    setIsEditingMenu(false);
+  }, [activeTabOrder]);
 
   // Keyboard shortcut for milk tea
   useEffect(() => {
@@ -590,7 +641,7 @@ const handlePrint = async (e: React.MouseEvent) => {
 
     try {
       const orderData = {
-        order_number: nextOrderNumber,
+        order_number: activeTabOrder?.order_number ?? nextOrderNumber,
         owner_id: user.id,
         subtotal,
         discount: discountAmount,
@@ -603,6 +654,7 @@ const handlePrint = async (e: React.MouseEvent) => {
         table_group: tableGroup || null,
         table_number: tableNumber || null,
         payment_method: paymentMethod,
+        closed: false,
       };
 
       const orderItemsData = orderItems.map(item => ({
@@ -615,10 +667,18 @@ const handlePrint = async (e: React.MouseEvent) => {
         total: item.total,
       }));
 
-      await createOrder.mutateAsync({
-        order: orderData,
-        orderItems: orderItemsData,
-      });
+      if (activeTabOrder) {
+        await updateOrder.mutateAsync({
+          orderId: activeTabOrder.id,
+          updates: orderData,
+          orderItems: orderItemsData,
+        });
+      } else {
+        await createOrder.mutateAsync({
+          order: orderData,
+          orderItems: orderItemsData,
+        });
+      }
 
       // Clear the order
       setOrderItems([]);
@@ -630,6 +690,7 @@ const handlePrint = async (e: React.MouseEvent) => {
       // reset paid state after saving
       setPaid(false);
       setPaidAmount(0);
+      onTabSessionComplete?.();
     } catch (error) {
       console.error('Error saving order:', error);
     }
@@ -677,11 +738,35 @@ const handlePrint = async (e: React.MouseEvent) => {
         });
       }
 
-      setFormData({ name: '', category: 'Tea', price: '', image_url: '' });
+      setFormData({ name: '', category: dbCategories[0] || DB_CATEGORIES[0], price: '', image_url: '' });
       setEditingItem(null);
       setIsAddingItem(false);
     } catch (error) {
       console.error('Error saving menu item:', error);
+    }
+  };
+
+  const handleSaveCategory = async () => {
+    const trimmedName = categoryName.trim();
+    if (!trimmedName) {
+      toast({
+        title: 'Missing category name',
+        description: 'Enter a name for the new category.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await createMenuCategory.mutateAsync({ name: trimmedName, owner_id: user.id });
+      setCategoryName('');
+      setIsAddingCategory(false);
+      setEditingItem(null);
+      setFormData(prev => ({ ...prev, category: trimmedName }));
+      setIsAddingItem(true);
+      await refetchCategories();
+    } catch (error) {
+      console.error('Error saving menu category:', error);
     }
   };
 
@@ -705,9 +790,11 @@ const handlePrint = async (e: React.MouseEvent) => {
   };
 
   const cancelEdit = () => {
-    setFormData({ name: '', category: 'Tea', price: '', image_url: '' });
+    setFormData({ name: '', category: dbCategories[0] || DB_CATEGORIES[0], price: '', image_url: '' });
     setEditingItem(null);
     setIsAddingItem(false);
+    setIsAddingCategory(false);
+    setCategoryName('');
   };
 
   return (
@@ -780,17 +867,57 @@ const handlePrint = async (e: React.MouseEvent) => {
                     <h4 className="font-medium text-sm">
                       {isAddingItem ? (editingItem ? 'Edit Item' : 'Add New Item') : 'Menu Management'}
                     </h4>
-                    {!isAddingItem && (
-                      <Button
-                        size="sm"
-                        onClick={() => setIsAddingItem(true)}
-                        className="flex items-center space-x-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Add Item</span>
-                      </Button>
+                    {!isAddingItem && !isAddingCategory && (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setIsAddingCategory(true)}
+                          className="flex items-center space-x-2"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Add Category</span>
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setEditingItem(null);
+                            setIsAddingItem(true);
+                          }}
+                          className="flex items-center space-x-2"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Add Item</span>
+                        </Button>
+                      </div>
                     )}
                   </div>
+
+                  {isAddingCategory && (
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="category-name" className="text-sm">Category name *</Label>
+                        <Input
+                          id="category-name"
+                          value={categoryName}
+                          onChange={(e) => setCategoryName(e.target.value)}
+                          placeholder="e.g. Breakfast"
+                          className="text-sm"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <Button variant="outline" size="sm" onClick={cancelEdit}>
+                          <X className="w-3 h-3 mr-1" />
+                          Cancel
+                        </Button>
+                        <Button size="sm" onClick={handleSaveCategory} disabled={createMenuCategory.isPending}>
+                          <Save className="w-3 h-3 mr-1" />
+                          {createMenuCategory.isPending ? 'Saving...' : 'Save Category'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
                   {isAddingItem && (
                     <div className="space-y-3">
@@ -952,46 +1079,33 @@ const handlePrint = async (e: React.MouseEvent) => {
             <Label className="text-xs">Customer name (optional)</Label>
             <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="e.g. John" className="text-sm" />
 
-            <div className="flex items-center space-x-2 mt-2">
-              <div className="flex-1">
-                <Label className="text-xs">Table group (optional)</Label>
-                <Select value={tableGroup ?? ''} onValueChange={(v) => { setTableGroup(v || null); setTableNumber(null); }}>
-                  <SelectTrigger className="text-sm"><SelectValue placeholder="None" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="A">A</SelectItem>
-                      <SelectItem value="B">B</SelectItem>
-                      <SelectItem value="C">C</SelectItem>
-                      <SelectItem value="D">D</SelectItem>
-                      <SelectItem value="T">T</SelectItem>
-                      <SelectItem value="G">G</SelectItem>
-                    </SelectContent>
-                </Select>
-              </div>
-              <div className="w-28">
-                <Label className="text-xs">Table #</Label>
-                <Select value={tableNumber ?? ''} onValueChange={(v) => setTableNumber(v || null)}>
-                  <SelectTrigger className="text-sm"><SelectValue placeholder="-" /></SelectTrigger>
-                  <SelectContent>
-                    {(() => {
-                      if (!tableGroup) return null;
-                      if (tableGroup === 'T') return ['T0', 'T1', 'T2', 'T3'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>);
-                      if (tableGroup === 'G') return ['G0', 'G1', 'G2'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>);
-                      // For A, B, C -> tables 1..8
-                      if (['A', 'B', 'C'].includes(tableGroup)) return Array.from({ length: 8 }, (_, i) => `${tableGroup}${i+1}`).map(t => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
-                      ));
-                      // For D -> tables 1..2
-                      if (tableGroup === 'D') return Array.from({ length: 2 }, (_, i) => `${tableGroup}${i+1}`).map(t => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
-                      ));
-                      // Fallback: keep previous behavior (5 tables)
-                      return Array.from({ length: 5 }, (_, i) => `${tableGroup}${i+1}`).map(t => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
-                      ));
-                    })()}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="mt-2 space-y-2">
+              <Label className="text-xs">Seating area (optional)</Label>
+              <Select value={tableGroup ?? ''} onValueChange={(v) => { setTableGroup(v || null); setTableNumber(null); }}>
+                <SelectTrigger className="text-sm"><SelectValue placeholder="No table selected" /></SelectTrigger>
+                <SelectContent>
+                  {TABLE_AREAS.map(area => <SelectItem key={area.value} value={area.value}>{area.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {tableGroup && (
+                <div className="grid grid-cols-5 gap-1.5" aria-label={`${tableGroup} tables`}>
+                  {Array.from({ length: TABLE_AREAS.find(area => area.value === tableGroup)?.tables ?? 0 }, (_, index) => {
+                    const number = String(index + 1);
+                    const selected = tableNumber === number;
+                    return (
+                      <button
+                        key={number}
+                        type="button"
+                        onClick={() => setTableNumber(selected ? null : number)}
+                        className={`h-8 rounded-md border text-xs font-medium transition-colors ${selected ? 'border-primary bg-primary text-primary-foreground' : 'hover:border-primary hover:bg-primary/10'}`}
+                        aria-pressed={selected}
+                      >
+                        {number}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             {/* One-off item input: name + price (does not change menu) */}
             <div className="mt-3">
@@ -1149,7 +1263,7 @@ const handlePrint = async (e: React.MouseEvent) => {
                     </div>
                   </div>
                   <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <label className="inline-flex items-center space-x-2">
                         <input
                           type="checkbox"
@@ -1173,59 +1287,46 @@ const handlePrint = async (e: React.MouseEvent) => {
                             onChange={(e) => setPaidAmount(Number(e.target.value || 0))}
                             className="w-28 h-6 text-sm"
                           />
-                          <span className="text-xs text-muted-foreground">paid</span>
                         </div>
                       )}
                     </div>
                     <div />
                   </div>
                 </div>
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                   <Button
                     type="button"
                     onClick={clearAllItems}
                     variant="outline"
-                    className="group flex-1 min-w-0 hover:bg-destructive hover:text-destructive-foreground"
+                    className="w-full justify-center gap-1 hover:bg-destructive hover:text-destructive-foreground"
                     size="sm"
                     disabled={orderItems.length === 0}
                   >
-                    <span className="w-5 inline-flex items-center justify-center text-muted-foreground">
-                      <Trash2 className="w-3 h-3 opacity-0 group-hover:opacity-100 text-white transition-opacity duration-150" />
-                    </span>
+                    <Trash2 className="w-3.5 h-3.5" />
                     <span>Clear</span>
                   </Button>
 
-                  {/* Print button - icon a
-                  ppears on hover; reserved icon space prevents shifting */}
                   <Button
                     type="button"
                     onClick={handlePrint}
                     variant="outline"
-                    className="group flex-1 min-w-0"
+                    className="w-full justify-center gap-1"
                     size="sm"
-                    disabled={createOrder.isPending || orderItems.length === 0}
+                    disabled={createOrder.isPending || updateOrder.isPending || orderItems.length === 0}
                   >
-                    <span className="w-5 inline-flex items-center justify-center text-muted-foreground">
-                      <Printer className="w-3 h-3 opacity-0 group-hover:opacity-100 text-white transition-opacity duration-150" />
-                    </span>
+                    <Printer className="w-3.5 h-3.5" />
                     <span>Print</span>
                   </Button>
 
                   <Button
                     type="button"
                     onClick={handleSaveOrder}
-                    className="group flex-1 min-w-0"
+                    className="w-full justify-center gap-1"
                     size="sm"
-                    disabled={createOrder.isPending || orderItems.length === 0}
+                    disabled={createOrder.isPending || updateOrder.isPending || orderItems.length === 0}
                   >
-                    <span className="w-5 inline-flex items-center justify-center text-muted-foreground">
-                      {createOrder.isPending ? (
-                        <RefreshCw className="w-3 h-3 mr-0 animate-spin" />
-                      ) : (
-                        <Save className="w-3 h-3 opacity-0 group-hover:opacity-100 text-white transition-opacity duration-150" />
-                      )}
-                    </span>
-                    <span>{createOrder.isPending ? 'Saving' : 'Save'}</span>
+                    {createOrder.isPending || updateOrder.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    <span>{createOrder.isPending || updateOrder.isPending ? 'Saving' : 'Save'}</span>
                   </Button>
                   <Button
                     type="button"
@@ -1260,7 +1361,15 @@ const handlePrint = async (e: React.MouseEvent) => {
                           total: item.total,
                         }));
 
-                        await createOrder.mutateAsync({ order: orderData, orderItems: orderItemsData });
+                          if (activeTabOrder) {
+                            await updateOrder.mutateAsync({
+                              orderId: activeTabOrder.id,
+                              updates: orderData,
+                              orderItems: orderItemsData,
+                            });
+                          } else {
+                            await createOrder.mutateAsync({ order: orderData, orderItems: orderItemsData });
+                          }
 
                         // Clear the order UI so the table is ready for new entries
                         setOrderItems([]);
@@ -1278,11 +1387,12 @@ const handlePrint = async (e: React.MouseEvent) => {
                         toast({ title: 'Error', description: 'Could not mark order paid.', variant: 'destructive' });
                       }
                     }}
-                    className="group flex-1 min-w-0 bg-green-600 hover:bg-green-700 text-white"
+                    className="w-full justify-center gap-1 bg-green-600 hover:bg-green-700 text-white"
                     size="sm"
-                    disabled={createOrder.isPending || orderItems.length === 0}
+                    disabled={createOrder.isPending || updateOrder.isPending || orderItems.length === 0}
                   >
-                    <span>Mark paid & Close</span>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Mark Paid</span>
                   </Button>
                 </div>
               </div>

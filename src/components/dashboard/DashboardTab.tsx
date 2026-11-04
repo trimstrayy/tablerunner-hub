@@ -15,6 +15,13 @@ interface DashboardTabProps {
   user: AuthUser;
 }
 
+const escapeReceiptText = (value: string | number | null | undefined) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
+
 export function DashboardTab({ user }: DashboardTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -53,7 +60,9 @@ export function DashboardTab({ user }: DashboardTabProps) {
     // table_number may already contain combined value like 'A3' or be separate; prefer combined
     const tableNumber: string | null = order.table_number ?? null;
     const tableGroup: string | null = order.table_group ?? null;
-    const combinedTable = tableNumber ?? (tableGroup ? `${tableGroup}${order.table_index ?? ''}`.replace(/\s+$/,'') : null);
+    const combinedTable = tableNumber
+      ? `${tableGroup ? `${tableGroup} ` : ''}${tableNumber}`
+      : (tableGroup ? `${tableGroup}${order.table_index ?? ''}`.replace(/\s+$/,'') : null);
     const displayLabel = customerName || combinedTable
       ? [customerName, combinedTable].filter(Boolean).join('  ')
       : `Order #${order.order_number}`;
@@ -134,13 +143,6 @@ export function DashboardTab({ user }: DashboardTabProps) {
 
   const [salesOpen, setSalesOpen] = useState(false);
 
-  const COMPANY_INFO = {
-    name: 'ठुल्दाई को चिया चौतारी  ',
-    address: '28 Kilo, Dhulikhel',
-    phone: '9768768326',
-    pan: '100717802'
-  };
-
   const printInIframe = (html: string) => {
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
@@ -185,6 +187,10 @@ export function DashboardTab({ user }: DashboardTabProps) {
 
   const handlePrintOrder = (order: any) => {
     if (!order) return;
+    const shopName = user.hotel_name?.trim() || 'Restaurant POS';
+    const shopLocation = user.hotel_location?.trim();
+    const shopPhone = user.contact_no?.trim();
+    const shopEmail = user.email?.trim();
     const receiptHTML = `
     <html>
       <head>
@@ -287,17 +293,17 @@ export function DashboardTab({ user }: DashboardTabProps) {
       <body>
         <div class="receipt">
           <div class="receipt-header">
-            <h1>${COMPANY_INFO.name}</h1>
-            <p>${COMPANY_INFO.address}</p>
-            <p>${COMPANY_INFO.phone}</p>
-            <p>PAN: ${COMPANY_INFO.pan}</p>
+            <h1>${escapeReceiptText(shopName)}</h1>
+            ${shopLocation ? `<p>${escapeReceiptText(shopLocation)}</p>` : ''}
+            ${shopPhone ? `<p>Contact: ${escapeReceiptText(shopPhone)}</p>` : ''}
+            ${shopEmail ? `<p>${escapeReceiptText(shopEmail)}</p>` : ''}
           </div>
           <div class="order-details">
             <p><strong>Order #${order.orderNumber}</strong></p>
             <p>Date: ${new Date().toLocaleDateString()}</p>
             <p>Time: ${new Date().toLocaleTimeString()}</p>
-            ${order.customerName ? `<p>Customer: ${order.customerName}</p>` : ''}
-            ${order.tableNumber ? `<p>Table: ${order.tableNumber}</p>` : ''}
+            ${order.customerName ? `<p>Customer: ${escapeReceiptText(order.customerName)}</p>` : ''}
+            ${order.tableNumber ? `<p>Table: ${escapeReceiptText(order.tableNumber)}</p>` : ''}
             ${order.paymentMethod ? `<p>Payment: ${order.paymentMethod === 'cash' ? 'Cash' : 'Online'}</p>` : ''}
           </div>
           <div class="items-header">
@@ -308,7 +314,7 @@ export function DashboardTab({ user }: DashboardTabProps) {
           </div>
           ${order.items.map((item: any) => `
             <div class="item-row">
-              <div class="item-name">${item.name}</div>
+              <div class="item-name">${escapeReceiptText(item.name)}</div>
               <div class="item-qty">${item.quantity}</div>
               <div class="item-price">NRs ${item.price}</div>
               <div class="item-total">NRs ${item.quantity * item.price}</div>
@@ -319,7 +325,7 @@ export function DashboardTab({ user }: DashboardTabProps) {
             ${order.discount && order.discount > 0 ? `<div class="total-row"><span>Discount:</span><span>-NRs ${order.discount}</span></div>` : ''}
             <div class="total-row final"><span>TOTAL:</span><span>NRs ${order.total}</span></div>
           </div>
-          <div class="footer"><p> म अनि मेरो चिया!</p></div>
+          <div class="footer"><p>Thank you</p></div>
         </div>
       </body>
     </html>
@@ -654,7 +660,7 @@ export function DashboardTab({ user }: DashboardTabProps) {
           <Card className="w-full max-w-md shadow-professional">
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                  <span>Order #{selectedOrder.orderNumber}{rawSelectedOrder?.customer_name ? ` — ${rawSelectedOrder.customer_name}` : ''}{rawSelectedOrder?.table_number ? ` — ${rawSelectedOrder.table_number}` : ''}</span>
+                  <span>Order #{selectedOrder.orderNumber}{rawSelectedOrder?.customer_name ? ` — ${rawSelectedOrder.customer_name}` : ''}{rawSelectedOrder?.table_number ? ` — ${rawSelectedOrder.table_group ? `${rawSelectedOrder.table_group} ` : ''}${rawSelectedOrder.table_number}` : ''}</span>
                 <Button
                   size="sm"
                   variant="ghost"

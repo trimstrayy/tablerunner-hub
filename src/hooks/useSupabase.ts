@@ -8,7 +8,9 @@ import {
   OrderInsert,
   OrderItem,
   OrderItemInsert,
-  User
+  User,
+  MenuCategoryInsert,
+  OrderPaymentInsert
 } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 
@@ -204,7 +206,8 @@ export const useCreateOrder = () => {
             .from('orders')
             .update({ closed: true } as any)
             .eq('owner_id', order.owner_id)
-            .eq('table_number', order.table_number);
+            .eq('table_number', order.table_number)
+            .eq('table_group', order.table_group || null);
           if (closeError) {
             // Non-fatal: log and continue; DB may not have the column yet.
             console.warn('Could not mark previous orders closed:', closeError.message || closeError);
@@ -340,6 +343,145 @@ export const useUpdateOrder = () => {
     onError: (error: any) => {
       toast({
         title: 'Error updating order',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+};
+
+export const useMenuCategories = (ownerId?: string) => {
+  return useQuery({
+    queryKey: ['menu-categories', ownerId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('menu_categories')
+        .select('*')
+        .eq('owner_id', ownerId as string)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!ownerId,
+  });
+};
+
+export const useCreateMenuCategory = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (category: MenuCategoryInsert) => {
+      const { data, error } = await supabase
+        .from('menu_categories')
+        .insert(category)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['menu-categories', data.owner_id] });
+      toast({
+        title: 'Category created',
+        description: `${data.name} is ready for new menu items.`,
+      });
+    },
+    onError: (error: any) => {
+      const description = error.code === '23505'
+        ? 'This category already exists.'
+        : error.message;
+      toast({
+        title: 'Error creating category',
+        description,
+        variant: 'destructive',
+      });
+    },
+  });
+};
+
+export const useOrderPayments = (ownerId?: string) => {
+  return useQuery({
+    queryKey: ['order-payments', ownerId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('order_payments')
+        .select('*')
+        .eq('owner_id', ownerId as string)
+        .order('paid_at', { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!ownerId,
+  });
+};
+
+export const useRecordOrderPayment = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({
+      payment,
+      currentCollected,
+      orderTotal,
+    }: {
+      payment: OrderPaymentInsert;
+      currentCollected: number;
+      orderTotal: number;
+    }) => {
+      const { data: existingPayments, error: existingError } = await supabase
+        .from('order_payments')
+        .select('amount')
+        .eq('order_id', payment.order_id);
+
+      if (existingError) throw existingError;
+
+      const ledgerCollected = (existingPayments || []).reduce(
+        (sum, record) => sum + Number(record.amount || 0),
+        0,
+      );
+      const baselineCollected = existingPayments && existingPayments.length > 0
+        ? ledgerCollected
+        : currentCollected;
+
+      const { data, error } = await supabase
+        .from('order_payments')
+        .insert(payment)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const collected = baselineCollected + Number(data.amount);
+      const isFullyPaid = collected >= orderTotal;
+      const { error: orderError } = await supabase
+        .from('orders')
+        .update({
+          paid_amount: collected,
+          paid: isFullyPaid,
+          closed: isFullyPaid,
+          payment_method: data.payment_method,
+        } as any)
+        .eq('id', payment.order_id);
+
+      if (orderError) throw orderError;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['order-payments'] });
+      toast({
+        title: 'Payment recorded',
+        description: `${data.payment_method === 'cash' ? 'Cash' : 'Online'} payment added successfully.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Payment failed',
         description: error.message,
         variant: 'destructive',
       });
